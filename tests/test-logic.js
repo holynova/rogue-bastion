@@ -34,6 +34,16 @@ t('composition length still matches', L.floorComposition(3).length === 14 && L.f
 t('scrap missile 30', L.scrapForKill('missile') === 30);
 t('floorTheme cycles', L.floorTheme(1) === 'grass' && L.floorTheme(2) === 'valley' && L.floorTheme(3) === 'steel' && L.floorTheme(4) === 'grass');
 
+// phase 3: weapons
+t('6 weapons, unique ids', L.WEAPONS.length === 6 && new Set(L.WEAPONS.map(w => w.id)).size === 6);
+t('weaponById emp', L.weaponById('emp') && L.weaponById('emp').name === 'EMP脉冲');
+t('weaponById unknown null', L.weaponById('nope') === null);
+t('all weapons have desc+cooldown', L.WEAPONS.every(w => w.desc && w.cooldown > 0 && w.icon));
+t('unlock F1 only pierce', eq(L.unlockedWeapons(1), ['pierce']));
+t('unlock F2 adds emp', L.unlockedWeapons(2).indexOf('emp') >= 0 && L.unlockedWeapons(2).length === 2);
+t('unlock F10 all 6', L.unlockedWeapons(10).length === 6);
+t('unlock floors ascending', L.WEAPONS.every((w, i) => i === 0 || w.unlockFloor >= L.WEAPONS[i - 1].unlockFloor));
+
 // draft
 t('draft 3 distinct', (() => { const d = L.draftChoices(3, []); return d.length === 3 && new Set(d.map(u => u.id)).size === 3; })());
 t('draft respects exclusions', (() => {

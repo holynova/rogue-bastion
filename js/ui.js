@@ -91,30 +91,42 @@
   }
 
   /* ---------- battle HUD + weapon bar ---------- */
-  var WEAPONS = [
-    { name: '重装穿甲', icon: 'bullet', locked: false },
-    { name: 'EMP脉冲', icon: 'lock', locked: true },
-    { name: '榴弹轰击', icon: 'lock', locked: true },
-    { name: '高爆破片', icon: 'lock', locked: true },
-    { name: '烟雾遮蔽', icon: 'lock', locked: true },
-    { name: '导弹齐射', icon: 'lock', locked: true }
-  ];
+  var currentWeapon = 'pierce';
 
   function buildWeaponBar() {
     var bar = $('weapon-bar');
     bar.innerHTML = '';
-    WEAPONS.forEach(function (w, i) {
-      var slot = el('button', 'wslot' + (w.locked ? ' locked' : ' active'));
+    var unlocked = L.unlockedWeapons(save.bestFloor);
+    L.WEAPONS.forEach(function (w, i) {
+      var isLocked = unlocked.indexOf(w.id) < 0;
+      var slot = el('button', 'wslot' + (isLocked ? ' locked' : '') + (w.id === currentWeapon ? ' active' : ''));
+      slot.dataset.weapon = w.id;
       var num = el('span', 'wslot-num', String(i + 1));
-      var ic = S.iconCanvas(w.icon, 3);
+      var ic = S.iconCanvas(isLocked ? 'lock' : w.icon, 3);
       ic.className = 'wslot-icon';
       var nm = el('span', 'wslot-name', w.name);
       slot.appendChild(num); slot.appendChild(ic); slot.appendChild(nm);
       slot.addEventListener('click', function () {
-        if (w.locked) toast('「' + w.name + '」后续版本开放');
-        else toast('当前武器：重装穿甲');
+        if (isLocked) {
+          if (Snd) Snd.play('denied');
+          toast('「' + w.name + '」到达 FLOOR ' + w.unlockFloor + ' 解锁（' + w.short + '）');
+        } else {
+          if (G.setWeapon(w.id)) {
+            currentWeapon = w.id;
+            if (run) run.weapon = w.id;
+            refreshWeaponBar();
+            toast('「' + w.name + '」' + w.desc);
+          }
+        }
       });
       bar.appendChild(slot);
+    });
+  }
+
+  function refreshWeaponBar() {
+    var slots = $('weapon-bar').querySelectorAll('.wslot');
+    slots.forEach(function (s) {
+      s.classList.toggle('active', s.dataset.weapon === currentWeapon);
     });
   }
 
@@ -133,6 +145,12 @@
     $('hud-enemies').textContent = '敌军剩余装甲：' + h.enemiesLeft + ' 机';
     $('hud-floor').textContent = L.FLOOR_NAMES[h.floor - 1] + ' // FLOOR ' + h.floor + ' / ' + L.TOTAL_FLOORS;
     $('hud-kills').textContent = '击毁 ' + h.kills + ' · 废料 ' + h.scrap;
+    // weapon bar sync: active weapon + cooldown dim
+    if (h.weapon && h.weapon !== currentWeapon) { currentWeapon = h.weapon; refreshWeaponBar(); }
+    if (h.weapon) {
+      var active = $('weapon-bar').querySelector('.wslot.active');
+      if (active) active.classList.toggle('cooling', (h.weaponCd || 0) > 0.05);
+    }
   }
 
   /* ---------- touch controls ---------- */
@@ -214,19 +232,22 @@
   function startRun() {
     if (Snd) { Snd.unlock(); Snd.play('click'); }
     run = {
-      floor: 1, kills: 0, scrap: 0, waves: 1, bestStreak: 0,
+      floor: 1, kills: 0, scrap: 0, waves: 1, bestStreak: 0, weapon: 'pierce',
       startTime: Date.now(), endTime: 0, owned: [], stats: freshStats()
     };
+    currentWeapon = 'pierce';
+    buildWeaponBar();
     save.runs++;
     storeSave();
     showScreen('screen-battle');
     G.input.autoAim = $('aim-toggle').checked;
     // wait a tick so the battle container has size before Phaser measures it
     setTimeout(function () {
-      G.start($('game-container'), { floor: 1, stats: run.stats, run: run, owned: run.owned }, {
+      G.start($('game-container'), { floor: 1, stats: run.stats, run: run, owned: run.owned, bestFloor: save.bestFloor, weapon: run.weapon }, {
         onHud: updateHud,
         onFloorClear: onFloorClear,
-        onDefeat: onDefeat
+        onDefeat: onDefeat,
+        onWeaponSwitch: function (id) { run.weapon = id; currentWeapon = id; refreshWeaponBar(); }
       });
     }, 30);
   }
@@ -275,7 +296,7 @@
     toast('获得强化：' + u.name);
     run.floor++;
     showScreen('screen-battle');
-    G.nextFloor({ floor: run.floor, stats: run.stats, run: run, owned: run.owned });
+    G.nextFloor({ floor: run.floor, stats: run.stats, run: run, owned: run.owned, bestFloor: save.bestFloor, weapon: run.weapon });
   }
 
   function onDefeat(runStats, reason) {

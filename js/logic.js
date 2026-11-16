@@ -135,6 +135,34 @@
     return null;
   }
 
+  /* Weapons: unlock by highest floor reached (persistent in save.bestFloor).
+     cooldown in seconds; numbers are the design source for game.js. */
+  var WEAPONS = [
+    { id: 'pierce',   name: '重装穿甲', icon: 'bullet',   unlockFloor: 1,  cooldown: 0.32,
+      desc: '高伤穿甲弹，对单体造成 38 点伤害', short: '单发高伤' },
+    { id: 'emp',      name: 'EMP脉冲', icon: 'emp',      unlockFloor: 2,  cooldown: 2.2,
+      desc: '脉冲冲击波：周围 110 范围内敌军眩晕 2.5 秒并受 10 点伤害', short: '范围眩晕' },
+    { id: 'grenade',  name: '榴弹轰击', icon: 'grenade',  unlockFloor: 3,  cooldown: 1.6,
+      desc: '向瞄准点投掷榴弹，70 范围爆炸造成 60 点伤害，可越过掩体', short: '范围爆炸' },
+    { id: 'frag',     name: '高爆破片', icon: 'frag',     unlockFloor: 5,  cooldown: 0.9,
+      desc: '霰弹：一次喷出 5 枚破片，每枚 12 点伤害，近身效果最佳', short: '扇形霰弹' },
+    { id: 'smoke',    name: '烟雾遮蔽', icon: 'smoke',    unlockFloor: 7,  cooldown: 6.0,
+      desc: '在脚下释放烟雾 5 秒，烟雾内敌军无法瞄准你', short: '隐蔽 5 秒' },
+    { id: 'missiles', name: '导弹齐射', icon: 'missiles', unlockFloor: 10, cooldown: 4.0,
+      desc: '锁定最多 4 个敌军，发射追踪导弹，每枚 30 点伤害', short: '追踪导弹' }
+  ];
+
+  function weaponById(id) {
+    for (var i = 0; i < WEAPONS.length; i++) if (WEAPONS[i].id === id) return WEAPONS[i];
+    return null;
+  }
+
+  // ids unlocked when the player has reached `bestFloor` (highest floor).
+  function unlockedWeapons(bestFloor) {
+    return WEAPONS.filter(function (w) { return w.unlockFloor <= (bestFloor || 1); })
+      .map(function (w) { return w.id; });
+  }
+
   // Pick `count` distinct upgrades, optionally excluding already-owned ids.
   // `rand` is an injectable rng (Math.random by default) for tests.
   function draftChoices(count, excludeIds, rand) {
@@ -209,6 +237,7 @@
     FLOOR_NAMES: FLOOR_NAMES, FLOOR_THEMES: FLOOR_THEMES, floorTheme: floorTheme,
     MAPS: MAPS, PLAYER: PLAYER, ENEMIES: ENEMIES, BASE: BASE,
     UPGRADES: UPGRADES, byId: byId, draftChoices: draftChoices, applyUpgrade: applyUpgrade,
+    WEAPONS: WEAPONS, weaponById: weaponById, unlockedWeapons: unlockedWeapons,
     floorEnemyCount: floorEnemyCount, floorComposition: floorComposition,
     scrapForKill: scrapForKill, streakTracker: streakTracker, fmtTime: fmtTime,
     validateMaps: validateMaps, findBase: findBase

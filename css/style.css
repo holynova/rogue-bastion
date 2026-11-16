@@ -147,6 +147,7 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
 }
 .wslot.active { border-color: var(--orange); background: #2a1a08; box-shadow: 0 0 0 1px var(--orange) inset; }
 .wslot.locked { opacity: .75; }
+.wslot.cooling { opacity: .45; }
 .wslot-num { position: absolute; top: 1px; left: 4px; font-size: 10px; color: #a5ecff; }
 .wslot-icon { width: 26px; height: 26px; }
 .wslot-name { font-size: 10px; color: #d6ecff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }

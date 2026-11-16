@@ -58,6 +58,10 @@
       this.stats = data.stats;      // player stat block (mutated by upgrades)
       this.run = data.run;          // { kills, scrap, waves, startTime, ... }
       this.owned = data.owned || [];
+      this.bestFloor = data.bestFloor || 1;
+      this.weapon = data.weapon || 'pierce';
+      this.weaponCds = {};
+      this.smokeZones = [];
       this.clearing = false;
       this.over = false;
       this.fireCd = 0;
@@ -160,7 +164,9 @@
       this.physics.add.collider(this.enemyGroup, this.base);
       this.physics.add.collider(this.enemyGroup, this.enemyGroup);
       this.physics.add.collider(this.player, this.enemyGroup);
-      this.physics.add.collider(this.playerBullets, this.walls, function (bul, wall) { self.onBulletWall(bul, wall); });
+      // homing missiles arc over walls (process callback skips them in the collider)
+      this.physics.add.collider(this.playerBullets, this.walls, function (bul, wall) { self.onBulletWall(bul, wall); },
+        function (bul) { return !bul.getData('homing'); });
       this.physics.add.collider(this.enemyBullets, this.walls, function (bul, wall) { self.onBulletWall(bul, wall); });
       this.physics.add.overlap(this.playerBullets, this.enemyGroup, function (bul, en) { self.onPlayerBulletHit(bul, en); });
       this.physics.add.overlap(this.enemyBullets, this.player, function (pl, bul) { self.onEnemyBulletHitPlayer(bul); });
@@ -173,7 +179,7 @@
       this.boom1.setDepth(9); this.boom2.setDepth(9); this.smoke.setDepth(8);
 
       // --- input ---
-      this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE');
+      this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,ONE,TWO,THREE,FOUR,FIVE,SIX');
       this.input.on('pointerdown', function (p) { if (p.event.target === self.sys.canvas) input.firing = true; });
       this.input.on('pointerup', function () { input.firing = false; });
 
@@ -203,7 +209,9 @@
         baseHp: Math.max(0, Math.ceil(this.baseHp)), baseShield: Math.max(0, Math.ceil(this.baseShield)),
         baseMax: L.BASE.hp + L.BASE.shield,
         enemiesLeft: (this.spawnQueue ? this.spawnQueue.length : 0) + this.enemies.length,
-        floor: this.floor, kills: this.run.kills, scrap: this.run.scrap, waves: this.wave
+        floor: this.floor, kills: this.run.kills, scrap: this.run.scrap, waves: this.wave,
+        weapon: this.weapon,
+        weaponCd: Math.max(0, ((this.weaponCds && this.weaponCds[this.weapon]) || 0) - (this.time ? this.time.now : 0)) / 1000
       };
     },
 
@@ -240,21 +248,42 @@
       this.tweens.add({ targets: star, scale: 0.4, alpha: 0, duration: 350, onComplete: function () { star.destroy(); } });
     },
 
-    fireBullet: function (x, y, angle, friendly, damage, speed, explosive) {
+    fireBullet: function (x, y, angle, friendly, damage, speed, explosive, opts) {
+      opts = opts || {};
       var group = friendly ? this.playerBullets : this.enemyBullets;
       var b = group.get(x, y, friendly ? 'bullet-player' : 'bullet-enemy');
       if (!b) return;
       b.setActive(true).setVisible(true).setDepth(7);
       b.body.enable = true;
       b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
-      b.setData({ damage: damage, explosive: !!explosive, friendly: friendly });
+      if (opts.tint) b.setTint(opts.tint); else b.clearTint();
+      b.setData({ damage: damage, explosive: !!explosive, friendly: friendly,
+        range: opts.range || 0, sx: x, sy: y, homing: opts.homing || null, speed: speed });
       b.setRotation(angle + Math.PI / 2);
+    },
+
+    setWeapon: function (id) {
+      var w = L.weaponById(id);
+      if (!w) return false;
+      if (L.unlockedWeapons(this.bestFloor).indexOf(id) < 0) return false;
+      this.weapon = id;
+      // small switch delay so spamming keys can't bypass cooldowns
+      this.weaponCds[id] = Math.max(this.weaponCds[id] || 0, this.time.now + 150);
+      if (Snd) Snd.play('click');
+      return true;
     },
 
     playerFire: function () {
       var now = this.time.now;
-      if (now < this.fireCd) return;
-      this.fireCd = now + this.stats.fireCooldown * 1000;
+      var w = L.weaponById(this.weapon) || L.WEAPONS[0];
+      var cd = (this.weapon === 'pierce') ? this.stats.fireCooldown : w.cooldown;
+      if (now < (this.weaponCds[this.weapon] || 0)) return;
+      this.weaponCds[this.weapon] = now + cd * 1000;
+      var fn = this['fire_' + this.weapon];
+      if (fn) fn.call(this);
+    },
+
+    fire_pierce: function () {
       var n = this.stats.projectiles || 1;
       var mx = this.player.x + Math.cos(this.turretAngle) * 18;
       var my = this.player.y + Math.sin(this.turretAngle) * 18;
@@ -268,6 +297,109 @@
       this.tweens.add({ targets: fl, scale: 1.5, alpha: 0, duration: 140, onComplete: function () { fl.destroy(); } });
       var glow = this.add.circle(mx, my, 5, 0xffd23e, 0.55).setDepth(8);
       this.tweens.add({ targets: glow, scale: 2.6, alpha: 0, duration: 160, onComplete: function () { glow.destroy(); } });
+    },
+
+    // EMP: stun + chip damage in a radius around the player
+    fire_emp: function () {
+      var now = this.time.now, self = this;
+      if (Snd) Snd.play('emp');
+      var ring = this.add.circle(this.player.x, this.player.y, 8).setStrokeStyle(4, 0x35c8f0).setDepth(8);
+      this.tweens.add({ targets: ring, scale: 14, alpha: 0, duration: 420, onComplete: function () { ring.destroy(); } });
+      this.boom2.explode(16, this.player.x, this.player.y);
+      this.enemies.slice().forEach(function (e) {
+        if (dist(self.player.x, self.player.y, e.chassis.x, e.chassis.y) <= 110) {
+          e.stunnedUntil = now + 2500;
+          self.damageEnemy(e, 10);
+        }
+      });
+    },
+
+    // Grenade: lobbed shell to the aim point, AoE 70 / 60 dmg, flies over walls
+    fire_grenade: function () {
+      var self = this;
+      var tgt = this.aimPoint(300);
+      var g = this.add.image(this.player.x, this.player.y, 'icon-grenade').setDepth(8).setScale(2);
+      if (Snd) Snd.play('fire');
+      this.tweens.add({
+        targets: g, x: tgt.x, y: tgt.y, duration: 420, ease: 'Quad.easeOut',
+        onUpdate: function () { g.setScale(2 + Math.sin(this.progress * Math.PI) * 1.2); },
+        onComplete: function () {
+          g.destroy();
+          if (self.over) return;
+          if (Snd) Snd.play('explosion', true);
+          self.explodeAt(tgt.x, tgt.y, true);
+          self.cameras.main.shake(120, 0.006);
+          self.enemies.slice().forEach(function (e) {
+            if (dist(tgt.x, tgt.y, e.chassis.x, e.chassis.y) <= 70) self.damageEnemy(e, 60);
+          });
+        }
+      });
+    },
+
+    // Frag: 5-pellet spread, short range
+    fire_frag: function () {
+      var mx = this.player.x + Math.cos(this.turretAngle) * 18;
+      var my = this.player.y + Math.sin(this.turretAngle) * 18;
+      for (var i = 0; i < 5; i++) {
+        var off = (i - 2) * 0.13;
+        this.fireBullet(mx, my, this.turretAngle + off, true, 12, 520, false, { range: 260 });
+      }
+      if (Snd) Snd.play('fire');
+      var fl = this.add.image(mx, my, 'star').setDepth(8).setScale(1.1).setAlpha(1);
+      this.tweens.add({ targets: fl, scale: 1.8, alpha: 0, duration: 140, onComplete: function () { fl.destroy(); } });
+    },
+
+    // Smoke: 5s concealment zone at the player's feet
+    fire_smoke: function () {
+      var now = this.time.now;
+      if (Snd) Snd.play('explosion', false);
+      var c = this.add.circle(this.player.x, this.player.y, 70, 0xb8bec6, 0.38).setDepth(7);
+      this.smoke.explode(14, this.player.x, this.player.y);
+      this.smokeZones.push({ x: this.player.x, y: this.player.y, until: now + 5000, circle: c });
+      this.floatText(this.player.x, this.player.y - 30, '烟雾遮蔽', '#a5ecff', 13);
+    },
+
+    // Missiles: up to 4 homing missiles at nearest enemies
+    fire_missiles: function () {
+      var self = this;
+      var targets = this.enemies.slice().sort(function (a, b) {
+        return dist(self.player.x, self.player.y, a.chassis.x, a.chassis.y) -
+               dist(self.player.x, self.player.y, b.chassis.x, b.chassis.y);
+      }).filter(function (e) {
+        return dist(self.player.x, self.player.y, e.chassis.x, e.chassis.y) <= 480;
+      }).slice(0, 4);
+      if (!targets.length) { this.floatText(this.player.x, this.player.y - 30, '无锁定目标', '#ff9a1f', 13); return; }
+      if (Snd) Snd.play('missile');
+      targets.forEach(function (e, i) {
+        var a = angleTo(self.player.x, self.player.y, e.chassis.x, e.chassis.y) + (i - (targets.length - 1) / 2) * 0.2;
+        self.time.delayedCall(i * 120, function () {
+          if (self.over) return;
+          self.fireBullet(self.player.x, self.player.y, a, true, 30, 380, false,
+            { homing: e, tint: 0xff9a1f });
+        });
+      });
+    },
+
+    // aim point for lobbed weapons: nearest enemy in range, else turret direction
+    aimPoint: function (maxRange) {
+      var best = null, bd = maxRange || 300;
+      for (var i = 0; i < this.enemies.length; i++) {
+        var e = this.enemies[i];
+        var d = dist(this.player.x, this.player.y, e.chassis.x, e.chassis.y);
+        if (d < bd) { bd = d; best = e; }
+      }
+      if (best) return { x: best.chassis.x, y: best.chassis.y };
+      return {
+        x: Phaser.Math.Clamp(this.player.x + Math.cos(this.turretAngle) * 200, 16, W - 16),
+        y: Phaser.Math.Clamp(this.player.y + Math.sin(this.turretAngle) * 200, 16, H - 16)
+      };
+    },
+
+    playerInSmoke: function () {
+      var now = this.time.now, self = this;
+      return this.smokeZones.some(function (z) {
+        return now < z.until && dist(self.player.x, self.player.y, z.x, z.y) <= 70;
+      });
     },
 
     explodeAt: function (x, y, big) {
@@ -500,8 +632,24 @@
       this.turret.setPosition(this.player.x, this.player.y);
       this.turret.setRotation(this.turretAngle + Math.PI / 2);
 
+      // --- weapon switching (keys 1-6) ---
+      var numKeys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'];
+      for (var ni = 0; ni < numKeys.length; ni++) {
+        if (Phaser.Input.Keyboard.JustDown(k[numKeys[ni]])) {
+          if (this.setWeapon(L.WEAPONS[ni].id) && hooks.onWeaponSwitch) hooks.onWeaponSwitch(this.weapon);
+        }
+      }
+
       // --- firing ---
       if ((input.firing || k.SPACE.isDown) && !this.over) this.playerFire();
+
+      // --- smoke zones expire ---
+      if (this.smokeZones.length) {
+        this.smokeZones = this.smokeZones.filter(function (z) {
+          if (time >= z.until) { z.circle.destroy(); return false; }
+          return true;
+        });
+      }
 
       // --- nano regen ---
       if (this.stats.nanoUntil > 0) {
@@ -530,11 +678,23 @@
       var self = this;
       this.enemies.slice().forEach(function (e) { self.updateEnemy(e, time, dt); });
 
-      // --- bullet bounds ---
+      // --- bullet bounds / homing / range ---
       [this.playerBullets, this.enemyBullets].forEach(function (g) {
         g.getChildren().forEach(function (b) {
           if (!b.active) return;
-          if (b.x < -10 || b.x > W + 10 || b.y < -10 || b.y > H + 10) b.disableBody(true, true);
+          var tgt = b.getData('homing');
+          if (tgt && tgt.hp > 0) {
+            var ha = Math.atan2(tgt.chassis.y - b.y, tgt.chassis.x - b.x);
+            var hs = b.getData('speed') || 380;
+            b.setVelocity(Math.cos(ha) * hs, Math.sin(ha) * hs);
+            b.setRotation(ha + Math.PI / 2);
+          }
+          if (b.x < -10 || b.x > W + 10 || b.y < -10 || b.y > H + 10) { b.disableBody(true, true); return; }
+          var rg = b.getData('range');
+          if (rg > 0) {
+            var dx = b.x - b.getData('sx'), dy = b.y - b.getData('sy');
+            if (dx * dx + dy * dy > rg * rg) b.disableBody(true, true);
+          }
         });
       });
 
@@ -549,6 +709,14 @@
     updateEnemy: function (e, time, dt) {
       var c = e.chassis;
       if (!c.active) return;
+      // EMP stun: frozen, cyan tint, cannot fire
+      if (time < (e.stunnedUntil || 0)) {
+        c.setVelocity(0, 0);
+        c.setTintFill(0x35c8f0);
+        if (e.turret) e.turret.setTintFill(0x35c8f0);
+        return;
+      }
+      if (e.stunnedUntil) { e.stunnedUntil = 0; c.clearTint(); if (e.turret) e.turret.clearTint(); }
       // retarget
       if (time > e.retargetAt) {
         e.retargetAt = time + 2000 + Math.random() * 2000;
@@ -630,8 +798,9 @@
         var bd = dist(c.x, c.y, this.base.x, this.base.y);
         var range = e.def.range || 420;
         var tgt = null;
+        var smoked = this.playerInSmoke();
         if (e.target === 'base' && bd < 320) tgt = { x: this.base.x, y: this.base.y };
-        else if (pd < range) tgt = { x: this.player.x, y: this.player.y };
+        else if (pd < range && !smoked) tgt = { x: this.player.x, y: this.player.y };
         if (tgt) {
           e.fireAt = time + e.def.fireInterval * 1000 * (0.8 + Math.random() * 0.5);
           var self = this;
@@ -696,9 +865,15 @@
     return null;
   }
 
+  function setWeapon(id) {
+    var sc = sceneRef;
+    if (sc && sc.setWeapon) return sc.setWeapon(id);
+    return false;
+  }
+
   global.RBGame = {
     start: start, destroy: destroy, setPaused: setPaused, nextFloor: nextFloor,
-    getHud: getHud, input: input, W: W, H: H,
+    getHud: getHud, setWeapon: setWeapon, input: input, W: W, H: H,
     _scene: function () { return sceneRef; } // test accessor
   };
 })(typeof window !== 'undefined' ? window : globalThis);

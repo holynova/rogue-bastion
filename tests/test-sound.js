@@ -7,7 +7,7 @@ function t(name, cond) {
   else { fail++; console.log('FAIL', name); }
 }
 t('loads in Node', !!S);
-t('has all sfx names', ['fire', 'enemyFire', 'hit', 'explosion', 'pickup', 'floorClear', 'victory', 'defeat', 'click', 'denied'].every(n => S._names().indexOf(n) >= 0));
+t('has all sfx names', ['fire', 'enemyFire', 'hit', 'explosion', 'pickup', 'floorClear', 'victory', 'defeat', 'click', 'denied', 'emp', 'missile'].every(n => S._names().indexOf(n) >= 0));
 t('play unknown is safe', (() => { S.play('nope'); return true; })());
 t('play each sfx is safe', (() => { S._names().forEach(n => S.play(n, true)); return true; })());
 t('setEnabled toggles', (() => { S.setEnabled(false); const a = S.isEnabled(); S.setEnabled(true); return a === false && S.isEnabled() === true; })());

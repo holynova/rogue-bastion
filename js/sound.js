@@ -89,6 +89,11 @@
         tone({ f0: f, dur: 0.25, vol: 0.4, type: 'sawtooth', delay: i * 0.16 });
       });
     },
+    emp: function () {
+      tone({ f0: 1800, f1: 220, dur: 0.22, vol: 0.4, type: 'sawtooth' });
+      noise({ dur: 0.15, vol: 0.25, cutoff: 3000 });
+    },
+    missile: function () { tone({ f0: 500, f1: 900, dur: 0.18, vol: 0.3, type: 'sawtooth' }); },
     click: function () { tone({ f0: 980, dur: 0.05, vol: 0.25, type: 'sine' }); },
     denied: function () { tone({ f0: 220, f1: 160, dur: 0.12, vol: 0.3, type: 'square' }); }
   };
