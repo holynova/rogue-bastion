@@ -44,6 +44,19 @@ t('unlock F2 adds emp', L.unlockedWeapons(2).indexOf('emp') >= 0 && L.unlockedWe
 t('unlock F10 all 6', L.unlockedWeapons(10).length === 6);
 t('unlock floors ascending', L.WEAPONS.every((w, i) => i === 0 || w.unlockFloor >= L.WEAPONS[i - 1].unlockFloor));
 
+// phase 4: armory
+t('5 armory items, unique ids', L.ARMORY_ITEMS.length === 5 && new Set(L.ARMORY_ITEMS.map(a => a.id)).size === 5);
+t('armory cost grows', (() => { const a = L.armoryItemById('armor'); return L.armoryCost(a, 0) === 100 && L.armoryCost(a, 1) === 180 && L.armoryCost(a, 4) === 1050; })());
+t('armory level capped at max', L.armoryLevel({ armor: 9 }, 'armor') === 5);
+t('armory level unknown 0', L.armoryLevel({}, 'nope') === 0);
+t('applyArmory armor 2 -> maxHp 160', L.applyArmory(L.freshStats(), { armor: 2 }).maxHp === 160);
+t('applyArmory armor 2 -> hp synced', L.applyArmory(L.freshStats(), { armor: 2 }).hp === 160);
+t('applyArmory damage 3 -> 56', L.applyArmory(L.freshStats(), { damage: 3 }).damage === 56);
+t('applyArmory reload 5 -> cd 0.22', Math.abs(L.applyArmory(L.freshStats(), { reload: 5 }).fireCooldown - 0.22) < 1e-9);
+t('applyArmory shield 1 -> baseShield 65', L.applyArmory(L.freshStats(), { shield: 1 }).baseShield === 65);
+t('applyArmory empty unchanged', (() => { const s = L.applyArmory(L.freshStats(), {}); return s.maxHp === 120 && s.damage === 38; })());
+t('applyArmory ignores unknown id', L.applyArmory(L.freshStats(), { nope: 3 }).damage === 38);
+
 // draft
 t('draft 3 distinct', (() => { const d = L.draftChoices(3, []); return d.length === 3 && new Set(d.map(u => u.id)).size === 3; })());
 t('draft respects exclusions', (() => {

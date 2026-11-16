@@ -249,6 +249,26 @@ body.touch #touch-controls { display: flex; }
 .result-btn.menu { background: #4a4f58; }
 .result-foot { font-size: 12px; color: #d6ecff; text-align: center; padding-bottom: 6px; }
 
+/* ---------- armory ---------- */
+#screen-armory { background: rgba(8, 10, 26, .94); align-items: center; justify-content: center; padding: 20px; }
+.arm-card { max-width: 460px; }
+.arm-balance { font-size: 18px; color: var(--yellow); text-align: center; }
+#armory-list { display: flex; flex-direction: column; gap: 8px; }
+.arm-row { display: flex; align-items: center; gap: 10px; background: var(--navy-deep); border: 2px solid #2a3558; padding: 10px 12px; }
+.arm-icon { width: 36px; height: 36px; flex: 0 0 auto; image-rendering: pixelated; }
+.arm-info { flex: 1; min-width: 0; text-align: left; }
+.arm-name-row { display: flex; align-items: center; gap: 8px; }
+.arm-name { font-size: 16px; }
+.arm-pips { display: inline-flex; gap: 3px; }
+.arm-pip { width: 10px; height: 10px; background: #2a3558; border: 1px solid var(--ink); }
+.arm-pip.on { background: var(--cyan-bright); }
+.arm-desc { font-size: 11px; color: #a5ecff; margin-top: 2px; }
+.arm-buy {
+  flex: 0 0 auto; font-family: inherit; font-size: 13px; color: var(--ink);
+  background: var(--yellow); border: 2px solid var(--ink); padding: 8px 10px; cursor: pointer;
+}
+.arm-buy:disabled { background: #3a3f4a; color: #8a919c; cursor: not-allowed; }
+
 /* ---------- settings ---------- */
 #screen-settings { background: rgba(8, 10, 26, .94); align-items: center; justify-content: center; padding: 20px; }
 .set-row {

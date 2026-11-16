@@ -11,8 +11,11 @@
   function loadSave() {
     try {
       var s = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
-      return { scrapTotal: s.scrapTotal || 0, bestFloor: s.bestFloor || 0, runs: s.runs || 0 };
-    } catch (e) { return { scrapTotal: 0, bestFloor: 0, runs: 0 }; }
+      return {
+        scrapTotal: s.scrapTotal || 0, bestFloor: s.bestFloor || 0, runs: s.runs || 0,
+        armory: s.armory || {}, runsHistory: s.runsHistory || []
+      };
+    } catch (e) { return { scrapTotal: 0, bestFloor: 0, runs: 0, armory: {}, runsHistory: [] }; }
   }
   function storeSave() {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {}
@@ -56,7 +59,7 @@
     updateMenuStats();
 
     $('btn-start').addEventListener('click', startRun);
-    $('btn-armory').addEventListener('click', function () { openPlaceholder('军械库', '武器、模块与永久升级，敬请期待。'); });
+    $('btn-armory').addEventListener('click', function () { if (Snd) Snd.play('click'); buildArmory(); showScreen('screen-armory'); });
     $('btn-rank').addEventListener('click', function () { openPlaceholder('排行榜', '赛季排名与好友榜，敬请期待。'); });
     $('btn-settings').addEventListener('click', function () { if (Snd) Snd.play('click'); showScreen('screen-settings'); });
     $('btn-ph-back').addEventListener('click', function () { showScreen('screen-menu'); });
@@ -82,6 +85,46 @@
   function updateMenuStats() {
     $('stat-scrap').textContent = save.scrapTotal;
     $('stat-floor').textContent = save.bestFloor > 0 ? 'FLOOR ' + save.bestFloor : '—';
+  }
+
+  /* ---------- armory (permanent upgrades) ---------- */
+  function buildArmory() {
+    $('armory-scrap').textContent = save.scrapTotal;
+    var list = $('armory-list');
+    list.innerHTML = '';
+    L.ARMORY_ITEMS.forEach(function (item) {
+      var lvl = L.armoryLevel(save.armory, item.id);
+      var maxed = lvl >= item.max;
+      var cost = L.armoryCost(item, lvl);
+      var row = el('div', 'arm-row');
+      var ic = S.iconCanvas(item.icon, 3);
+      ic.className = 'arm-icon';
+      var info = el('div', 'arm-info');
+      var nameRow = el('div', 'arm-name-row');
+      nameRow.appendChild(el('span', 'arm-name', item.name));
+      var pips = el('span', 'arm-pips');
+      for (var i = 0; i < item.max; i++) pips.appendChild(el('span', 'arm-pip' + (i < lvl ? ' on' : '')));
+      nameRow.appendChild(pips);
+      info.appendChild(nameRow);
+      info.appendChild(el('div', 'arm-desc', item.desc + ' · 当前 Lv.' + lvl));
+      row.appendChild(ic);
+      row.appendChild(info);
+      var btn = el('button', 'arm-buy', maxed ? '已满级' : cost + ' 废料');
+      btn.disabled = maxed || save.scrapTotal < cost;
+      btn.addEventListener('click', function () {
+        if (maxed || save.scrapTotal < cost) return;
+        save.scrapTotal -= cost;
+        save.armory[item.id] = lvl + 1;
+        storeSave();
+        updateMenuStats();
+        if (Snd) Snd.play('pickup');
+        toast('「' + item.name + '」升至 Lv.' + (lvl + 1));
+        buildArmory();
+      });
+      row.appendChild(btn);
+      list.appendChild(row);
+    });
+    $('btn-arm-back').onclick = function () { if (Snd) Snd.play('click'); showScreen('screen-menu'); };
   }
 
   function openPlaceholder(title, desc) {
@@ -221,12 +264,7 @@
 
   /* ---------- run flow ---------- */
   function freshStats() {
-    return {
-      hp: L.PLAYER.hp, maxHp: L.PLAYER.maxHp, speed: L.PLAYER.speed,
-      bulletSpeed: L.PLAYER.bulletSpeed, damage: L.PLAYER.damage,
-      fireCooldown: L.PLAYER.fireCooldown, projectiles: 1, explosive: false,
-      nanoUntil: 0, nanoRate: 0
-    };
+    return L.applyArmory(L.freshStats(), save.armory);
   }
 
   function startRun() {

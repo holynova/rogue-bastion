@@ -75,7 +75,7 @@
       this.wave = 1;
       this._spawnedAny = false;
       this._waveCounted = false;
-      this.baseShield = L.BASE.shield;
+      this.baseShield = this.stats.baseShield || L.BASE.shield;
       this.baseHp = L.BASE.hp;
     },
 
@@ -207,7 +207,7 @@
       return {
         playerHp: Math.max(0, Math.ceil(this.playerHp || 0)), playerMaxHp: this.playerMaxHp,
         baseHp: Math.max(0, Math.ceil(this.baseHp)), baseShield: Math.max(0, Math.ceil(this.baseShield)),
-        baseMax: L.BASE.hp + L.BASE.shield,
+        baseMax: L.BASE.hp + (this.stats.baseShield || L.BASE.shield),
         enemiesLeft: (this.spawnQueue ? this.spawnQueue.length : 0) + this.enemies.length,
         floor: this.floor, kills: this.run.kills, scrap: this.run.scrap, waves: this.wave,
         weapon: this.weapon,

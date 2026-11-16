@@ -163,6 +163,59 @@
       .map(function (w) { return w.id; });
   }
 
+  // base run stats (before armory bonuses and draft upgrades)
+  function freshStats() {
+    return {
+      hp: PLAYER.hp, maxHp: PLAYER.maxHp, speed: PLAYER.speed,
+      bulletSpeed: PLAYER.bulletSpeed, damage: PLAYER.damage,
+      fireCooldown: PLAYER.fireCooldown, projectiles: 1, explosive: false,
+      nanoUntil: 0, nanoRate: 0, baseShield: BASE.shield
+    };
+  }
+
+  /* Armory: permanent upgrades bought with scrap, stored in save.armory {id: level}.
+     cost(level) = round(baseCost * costMul^level) for the NEXT level (level = current). */
+  var ARMORY_ITEMS = [
+    { id: 'armor',  name: '装甲上限', icon: 'nano',   max: 5, baseCost: 100, costMul: 1.8, per: 20,   stat: 'maxHp',        desc: '生命上限 +20 / 级' },
+    { id: 'damage', name: '火炮威力', icon: 'bullet', max: 5, baseCost: 120, costMul: 1.8, per: 6,    stat: 'damage',       desc: '主炮伤害 +6 / 级' },
+    { id: 'speed',  name: '引擎功率', icon: 'bolt',   max: 5, baseCost: 80,  costMul: 1.8, per: 12,   stat: 'speed',        desc: '移动速度 +12 / 级' },
+    { id: 'reload', name: '快速装弹', icon: 'clock',  max: 5, baseCost: 100, costMul: 1.8, per: 0.02, stat: 'fireCooldown', desc: '装弹间隔 -0.02 秒 / 级' },
+    { id: 'shield', name: '基地护盾', icon: 'shield', max: 5, baseCost: 90,  costMul: 1.8, per: 15,   stat: 'baseShield',   desc: '基地护盾 +15 / 级' }
+  ];
+
+  function armoryItemById(id) {
+    for (var i = 0; i < ARMORY_ITEMS.length; i++) if (ARMORY_ITEMS[i].id === id) return ARMORY_ITEMS[i];
+    return null;
+  }
+
+  function armoryCost(item, level) {
+    return Math.round(item.baseCost * Math.pow(item.costMul, level || 0));
+  }
+
+  function armoryLevel(armory, id) {
+    var item = armoryItemById(id);
+    var lvl = (armory && armory[id]) || 0;
+    return item ? Math.max(0, Math.min(item.max, lvl)) : 0;
+  }
+
+  // apply permanent armory bonuses to a fresh stats object; returns a new object.
+  function applyArmory(stats, armory) {
+    var out = {};
+    Object.keys(stats).forEach(function (k) { out[k] = stats[k]; });
+    ARMORY_ITEMS.forEach(function (item) {
+      var lvl = armoryLevel(armory, item.id);
+      if (!lvl) return;
+      if (item.stat === 'fireCooldown') {
+        out.fireCooldown = Math.max(0.15, out.fireCooldown - item.per * lvl);
+      } else {
+        out[item.stat] = (out[item.stat] || 0) + item.per * lvl;
+      }
+    });
+    // keep current hp in sync with the raised cap (fresh run starts full)
+    if (out.maxHp !== stats.maxHp) out.hp = out.maxHp;
+    return out;
+  }
+
   // Pick `count` distinct upgrades, optionally excluding already-owned ids.
   // `rand` is an injectable rng (Math.random by default) for tests.
   function draftChoices(count, excludeIds, rand) {
@@ -237,7 +290,10 @@
     FLOOR_NAMES: FLOOR_NAMES, FLOOR_THEMES: FLOOR_THEMES, floorTheme: floorTheme,
     MAPS: MAPS, PLAYER: PLAYER, ENEMIES: ENEMIES, BASE: BASE,
     UPGRADES: UPGRADES, byId: byId, draftChoices: draftChoices, applyUpgrade: applyUpgrade,
+    freshStats: freshStats,
     WEAPONS: WEAPONS, weaponById: weaponById, unlockedWeapons: unlockedWeapons,
+    ARMORY_ITEMS: ARMORY_ITEMS, armoryItemById: armoryItemById, armoryCost: armoryCost,
+    armoryLevel: armoryLevel, applyArmory: applyArmory,
     floorEnemyCount: floorEnemyCount, floorComposition: floorComposition,
     scrapForKill: scrapForKill, streakTracker: streakTracker, fmtTime: fmtTime,
     validateMaps: validateMaps, findBase: findBase
