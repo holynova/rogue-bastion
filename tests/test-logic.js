@@ -25,6 +25,15 @@ t('F1 no heavy', L.floorComposition(1).indexOf('heavy') === -1);
 t('F3 has 4 heavy', L.floorComposition(3).filter(x => x === 'heavy').length === 4);
 t('composition length matches count', L.floorComposition(2).length === 12);
 
+// phase 1: missile enemy + floor themes
+t('missile def exists with burst+range', L.ENEMIES.missile && L.ENEMIES.missile.burst === 3 && L.ENEMIES.missile.range === 520);
+t('F1 no missile', L.floorComposition(1).indexOf('missile') === -1);
+t('F2 has 2 missile', L.floorComposition(2).filter(x => x === 'missile').length === 2);
+t('F3 has 3 missile', L.floorComposition(3).filter(x => x === 'missile').length === 3);
+t('composition length still matches', L.floorComposition(3).length === 14 && L.floorComposition(2).length === 12);
+t('scrap missile 30', L.scrapForKill('missile') === 30);
+t('floorTheme cycles', L.floorTheme(1) === 'grass' && L.floorTheme(2) === 'valley' && L.floorTheme(3) === 'steel' && L.floorTheme(4) === 'grass');
+
 // draft
 t('draft 3 distinct', (() => { const d = L.draftChoices(3, []); return d.length === 3 && new Set(d.map(u => u.id)).size === 3; })());
 t('draft respects exclusions', (() => {

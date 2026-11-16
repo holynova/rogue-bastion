@@ -13,7 +13,9 @@
     player:  { G: '#3ecf5a', g: '#2a9e46', L: '#7ded8a', T: '#14532d', t: '#1f7a33', C: '#3a3f4a', Y: '#ffd23e', K: K },
     scout:   { G: '#b8bec6', g: '#8a919c', L: '#e8ecf0', T: '#4a4f58', t: '#646b75', C: '#3a3f4a', Y: '#e5484d', K: K },
     assault: { G: '#8a8f98', g: '#6b7078', L: '#b8bec6', T: '#3a3f4a', t: '#4a4f58', C: '#2b2f36', Y: '#ff9a1f', K: K },
-    heavy:   { G: '#5b6068', g: '#43484f', L: '#8a919c', T: '#23262b', t: '#33373d', C: '#1d1f24', Y: '#e5484d', K: K }
+    heavy:   { G: '#5b6068', g: '#43484f', L: '#8a919c', T: '#23262b', t: '#33373d', C: '#1d1f24', Y: '#e5484d', K: K },
+    missile: { G: '#9a7bd6', g: '#7a5bb0', L: '#c4a8f0', T: '#3d2d5c', t: '#52407a', C: '#3a3f4a', Y: '#ff5c8a', K: K },
+    boss:    { G: '#c23b4e', g: '#96283a', L: '#ff7a6b', T: '#3d1220', t: '#571a2c', C: '#1d1f24', Y: '#ffd23e', K: K }
   };
 
   /* 16x16 top-down tank, facing up. Cannon cols 7-8. */
@@ -107,6 +109,46 @@
     '....KLLLLLLK....',
     '.....KKKKKK.....',
     '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................'
+  ];
+
+  /* Scout turret: thin barrel + antenna with red tip. */
+  var SCOUT_TURRET_MAP = [
+    '.......KK...Y...',
+    '.......CC...K...',
+    '.......CC...K...',
+    '.......CC.......',
+    '.......CC.......',
+    '.....KKKKKK.....',
+    '....KLLLLLLK....',
+    '....KLLYYLLK....',
+    '....KLLLLLLK....',
+    '.....KKKKKK.....',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................'
+  ];
+
+  /* Missile turret: 3-tube rocket pod (no single cannon). */
+  var MISSILE_TURRET_MAP = [
+    '................',
+    '................',
+    '.....KKKKKK.....',
+    '....KCCCCCCK....',
+    '....KCYCCYCK....',
+    '....KCCCCCCK....',
+    '....KKKKKKKK....',
+    '....KLLLLLLK....',
+    '....KLLYYLLK....',
+    '....KLLLLLLK....',
+    '.....KKKKKK.....',
     '................',
     '................',
     '................',
@@ -363,8 +405,16 @@
     return c;
   }
 
-  /* Procedural 16x16 tiles, drawn at `scale` (2 => 32px). */
-  function drawTile(type, scale, tx, ty) {
+  /* Ground palettes per floor theme. */
+  var GROUND_PAL = {
+    grass:  { base: '#79ad54', dark: '#649640', light: '#93c46d', tuft: '#4e8a35' },
+    valley: { base: '#8a6a45', dark: '#75572f', light: '#a07d52', tuft: '#5da24a' },
+    steel:  { base: '#7d7768', dark: '#68625a', light: '#948d7e', tuft: '#5d7a4a' }
+  };
+
+  /* Procedural 16x16 tiles, drawn at `scale` (2 => 32px).
+     `theme` ('grass'|'valley'|'steel') tints the ground family. */
+  function drawTile(type, scale, tx, ty, theme) {
     scale = scale || 2;
     var S = 16 * scale;
     var c = makeCanvas(S, S);
@@ -372,24 +422,76 @@
     function px(x, y, col) { ctx.fillStyle = col; ctx.fillRect(x * scale, y * scale, scale, scale); }
     function rect(x, y, w, h, col) { ctx.fillStyle = col; ctx.fillRect(x * scale, y * scale, w * scale, h * scale); }
     var i, x, y;
+    var gp = GROUND_PAL[theme] || GROUND_PAL.valley;
     if (type === 'ground') {
-      rect(0, 0, 16, 16, '#8a6a45');
+      rect(0, 0, 16, 16, gp.base);
       for (i = 0; i < 14; i++) {
         x = Math.floor(hash2(tx * 31 + i, ty * 17 + i) * 16);
         y = Math.floor(hash2(tx * 13 + i * 3, ty * 29 + i) * 16);
-        px(x, y, hash2(i, tx + ty) > 0.5 ? '#75572f' : '#a07d52');
+        px(x, y, hash2(i, tx + ty) > 0.5 ? gp.dark : gp.light);
       }
       for (i = 0; i < 4; i++) {
         x = Math.floor(hash2(tx * 7 + i * 11, ty * 3 + i) * 16);
         y = Math.floor(hash2(tx * 5 + i, ty * 11 + i * 7) * 16);
-        px(x, y, '#5da24a');
+        px(x, y, gp.tuft);
       }
     } else if (type === 'grass') {
-      rect(0, 0, 16, 16, '#6db654');
+      rect(0, 0, 16, 16, theme === 'steel' ? '#5d8a4a' : '#6db654');
       for (i = 0; i < 16; i++) {
         x = Math.floor(hash2(tx * 31 + i, ty * 17 + i) * 16);
         y = Math.floor(hash2(tx * 13 + i * 3, ty * 29 + i) * 16);
         px(x, y, hash2(i, tx + ty) > 0.5 ? '#5da24a' : '#82cc6a');
+      }
+      // grass blades
+      for (i = 0; i < 5; i++) {
+        x = 1 + Math.floor(hash2(tx * 11 + i, ty * 5) * 14);
+        y = 1 + Math.floor(hash2(tx * 5 + i, ty * 11) * 13);
+        px(x, y, '#4e8a35'); px(x, y + 1, '#82cc6a');
+      }
+    } else if (type === 'path') {
+      // packed dirt road with wheel ruts
+      rect(0, 0, 16, 16, '#a8895c');
+      rect(0, 4, 16, 2, '#7a6242');
+      rect(0, 11, 16, 2, '#7a6242');
+      for (i = 0; i < 10; i++) {
+        x = Math.floor(hash2(tx * 29 + i, ty * 19 + i) * 16);
+        y = Math.floor(hash2(tx * 17 + i * 3, ty * 23 + i) * 16);
+        px(x, y, hash2(i, tx + ty) > 0.5 ? '#8a6f4a' : '#c2a878');
+      }
+    } else if (type === 'crater') {
+      // shell crater: dark pit with raised rim
+      rect(0, 0, 16, 16, gp.base);
+      for (i = 0; i < 8; i++) {
+        x = Math.floor(hash2(tx * 31 + i, ty * 17 + i) * 16);
+        y = Math.floor(hash2(tx * 13 + i * 3, ty * 29 + i) * 16);
+        px(x, y, gp.dark);
+      }
+      rect(4, 3, 8, 10, '#5d4630');
+      rect(5, 4, 6, 8, '#4a3626');
+      rect(6, 5, 4, 6, '#3a2a1e');
+      rect(4, 12, 8, 1, gp.light);
+      px(5, 6, '#6b5138'); px(10, 9, '#6b5138');
+    } else if (type === 'gravel') {
+      rect(0, 0, 16, 16, '#8d8880');
+      for (i = 0; i < 18; i++) {
+        x = Math.floor(hash2(tx * 31 + i, ty * 17 + i) * 16);
+        y = Math.floor(hash2(tx * 13 + i * 3, ty * 29 + i) * 16);
+        var gcol = ['#6b6660', '#a8a39c', '#7a756e', '#b5b0a8'][Math.floor(hash2(i, tx + ty) * 4)];
+        px(x, y, gcol);
+      }
+      rect(3, 4, 2, 2, '#5d5852'); rect(11, 10, 2, 2, '#5d5852'); rect(6, 12, 2, 1, '#a8a39c');
+    } else if (type === 'flowers') {
+      rect(0, 0, 16, 16, '#6db654');
+      for (i = 0; i < 10; i++) {
+        x = Math.floor(hash2(tx * 31 + i, ty * 17 + i) * 16);
+        y = Math.floor(hash2(tx * 13 + i * 3, ty * 29 + i) * 16);
+        px(x, y, hash2(i, tx + ty) > 0.5 ? '#5da24a' : '#82cc6a');
+      }
+      var petals = ['#ffffff', '#ffd23e', '#ff8ab0', '#ffffff'];
+      for (i = 0; i < 4; i++) {
+        x = 2 + Math.floor(hash2(tx * 7 + i * 5, ty * 3 + i) * 12);
+        y = 2 + Math.floor(hash2(tx * 3 + i, ty * 7 + i * 5) * 12);
+        px(x, y, petals[i]); px(x + 1, y, '#4e8a35'); px(x, y + 1, '#4e8a35');
       }
     } else if (type === 'brick') {
       rect(0, 0, 16, 16, '#c25a33');
@@ -461,6 +563,57 @@
     px(11, 9, '#ffffff'); px(19, 18, '#1a8fc0'); px(19, 9, '#1a8fc0');
     // corner bolts
     px(8, 6, '#fff7d6'); px(23, 6, '#fff7d6'); px(8, 21, '#fff7d6'); px(23, 21, '#fff7d6');
+    return c;
+  }
+
+  /* Battlefield decorations (16x16, transparent background, drawn at scale 2).
+     Purely visual: no collision, placed on open ground tiles. */
+  function drawDecor(kind, scale) {
+    scale = scale || 2;
+    var S = 16 * scale;
+    var c = makeCanvas(S, S);
+    var ctx = c.getContext('2d');
+    function px(x, y, col) { ctx.fillStyle = col; ctx.fillRect(x * scale, y * scale, scale, scale); }
+    function rect(x, y, w, h, col) { ctx.fillStyle = col; ctx.fillRect(x * scale, y * scale, w * scale, h * scale); }
+    if (kind === 'wreck') {
+      // burnt-out tank hull, barrel snapped off
+      rect(2, 5, 12, 7, '#23262b');
+      rect(3, 6, 10, 5, '#3a3f4a');
+      rect(4, 4, 6, 3, '#2b2f36');
+      rect(5, 2, 5, 1, '#2b2f36');
+      px(6, 1, '#4a4f58'); px(7, 1, '#4a4f58');
+      rect(10, 7, 4, 1, '#1d1f24');
+      px(3, 7, '#c2570b'); px(11, 9, '#c2570b'); px(6, 10, '#c2570b');
+      px(2, 12, '#4a4f58'); px(13, 12, '#4a4f58'); px(5, 13, '#4a4f58');
+    } else if (kind === 'barrel') {
+      rect(5, 2, 6, 12, '#b3541e');
+      rect(5, 2, 6, 2, '#e07a4a');
+      rect(5, 6, 6, 1, '#7c3418');
+      rect(5, 10, 6, 1, '#7c3418');
+      rect(5, 13, 6, 1, '#7c3418');
+      rect(5, 2, 1, 12, '#8a3c14');
+      rect(10, 2, 1, 12, '#8a3c14');
+      px(6, 4, '#ffd23e'); px(8, 8, '#ffd23e');
+    } else if (kind === 'sandbag') {
+      rect(2, 9, 12, 4, '#c2a878');
+      rect(4, 5, 8, 4, '#c2a878');
+      rect(6, 2, 4, 3, '#c2a878');
+      rect(2, 12, 12, 1, '#8a6a45');
+      rect(4, 8, 8, 1, '#8a6a45');
+      px(4, 10, '#8a6a45'); px(9, 10, '#8a6a45'); px(6, 6, '#8a6a45');
+      px(3, 9, '#e8d5a8'); px(10, 6, '#e8d5a8');
+    } else if (kind === 'rock') {
+      rect(4, 6, 8, 6, '#9aa3ad');
+      rect(5, 4, 6, 2, '#b8bec6');
+      rect(4, 11, 8, 1, '#5b6068');
+      px(5, 6, '#e8ecf0'); px(10, 7, '#e8ecf0');
+      px(3, 11, '#6b7280'); px(12, 11, '#6b7280');
+    } else if (kind === 'tuft') {
+      px(7, 10, '#2f9e44'); px(8, 10, '#2f9e44');
+      px(6, 8, '#3ecf5a'); px(8, 7, '#3ecf5a'); px(9, 9, '#3ecf5a');
+      px(7, 6, '#7ded8a'); px(10, 8, '#7ded8a'); px(5, 9, '#7ded8a');
+      px(7, 11, '#1f7a33'); px(9, 11, '#1f7a33');
+    }
     return c;
   }
 
@@ -548,30 +701,60 @@
     add('tank-scout', renderMap(TANK_MAP, TANK_PALETTES.scout, 2));
     add('tank-assault', renderMap(TANK_MAP, TANK_PALETTES.assault, 2));
     add('tank-heavy', renderMap(HEAVY_MAP, TANK_PALETTES.heavy, 2));
+    add('tank-missile', renderMap(TANK_MAP, TANK_PALETTES.missile, 2));
+    add('tank-boss', renderMap(HEAVY_MAP, TANK_PALETTES.boss, 2));
     add('chassis-player', renderMap(CHASSIS_MAP, TANK_PALETTES.player, 2));
     add('chassis-scout', renderMap(CHASSIS_MAP, TANK_PALETTES.scout, 2));
     add('chassis-assault', renderMap(CHASSIS_MAP, TANK_PALETTES.assault, 2));
     add('chassis-heavy', renderMap(CHASSIS_MAP, TANK_PALETTES.heavy, 2));
+    add('chassis-missile', renderMap(CHASSIS_MAP, TANK_PALETTES.missile, 2));
+    add('chassis-boss', renderMap(CHASSIS_MAP, TANK_PALETTES.boss, 2));
     add('turret-player', renderMap(TURRET_MAP, TANK_PALETTES.player, 2));
-    add('turret-scout', renderMap(TURRET_MAP, TANK_PALETTES.scout, 2));
+    add('turret-scout', renderMap(SCOUT_TURRET_MAP, TANK_PALETTES.scout, 2));
     add('turret-assault', renderMap(TURRET_MAP, TANK_PALETTES.assault, 2));
     add('turret-heavy', renderMap(HEAVY_TURRET_MAP, TANK_PALETTES.heavy, 2));
+    add('turret-missile', renderMap(MISSILE_TURRET_MAP, TANK_PALETTES.missile, 2));
+    add('turret-boss', renderMap(HEAVY_TURRET_MAP, TANK_PALETTES.boss, 2));
     add('bullet-player', renderMap(BULLET_PLAYER, BULLET_PAL, 2));
     add('bullet-enemy', renderMap(BULLET_ENEMY, BULLET_PAL, 2));
     add('star', renderMap(STAR_MAP, STAR_PAL, 2));
     add('tile-ground', drawTile('ground', 2, 1, 1));
     add('tile-ground2', drawTile('ground', 2, 5, 9));
     add('tile-grass', drawTile('grass', 2, 3, 7));
+    add('tile-path', drawTile('path', 2, 2, 6));
+    add('tile-crater', drawTile('crater', 2, 8, 3));
+    add('tile-gravel', drawTile('gravel', 2, 6, 2));
+    add('tile-flowers', drawTile('flowers', 2, 4, 8));
     add('tile-brick', drawTile('brick', 2, 0, 0));
     add('tile-steel', drawTile('steel', 2, 0, 0));
     add('tile-river', drawTile('river', 2, 2, 2));
     add('tile-bush', drawTile('bush', 2, 4, 4));
+    add('decor-wreck', drawDecor('wreck', 2));
+    add('decor-barrel', drawDecor('barrel', 2));
+    add('decor-sandbag', drawDecor('sandbag', 2));
+    add('decor-rock', drawDecor('rock', 2));
+    add('decor-tuft', drawDecor('tuft', 2));
     add('base', drawBase(2));
     // 4x4 white square for particles
     var p = makeCanvas(4, 4);
     var pctx = p.getContext('2d');
     pctx.fillStyle = '#ffffff'; pctx.fillRect(0, 0, 4, 4);
     add('px', p);
+  }
+
+  /* Rebuild the ground-family textures tinted for a floor theme.
+     Call after buildTextures() inside scene create (textures are replaced). */
+  function buildGroundTextures(scene, theme) {
+    var tex = scene.textures;
+    function add(key, canvas) {
+      if (tex.exists(key)) tex.remove(key);
+      tex.addCanvas(key, canvas);
+    }
+    add('tile-ground', drawTile('ground', 2, 1, 1, theme));
+    add('tile-ground2', drawTile('ground', 2, 5, 9, theme));
+    add('tile-grass', drawTile('grass', 2, 3, 7, theme));
+    add('tile-flowers', drawTile('flowers', 2, 4, 8, theme));
+    add('tile-crater', drawTile('crater', 2, 8, 3, theme));
   }
 
   function iconCanvas(name, scale) {
@@ -586,8 +769,9 @@
 
   var api = {
     TANK_PALETTES: TANK_PALETTES, TANK_MAP: TANK_MAP, HEAVY_MAP: HEAVY_MAP,
-    renderMap: renderMap, drawTile: drawTile, drawBase: drawBase,
+    renderMap: renderMap, drawTile: drawTile, drawBase: drawBase, drawDecor: drawDecor,
     menuBackdrop: menuBackdrop, buildTextures: buildTextures,
+    buildGroundTextures: buildGroundTextures,
     iconCanvas: iconCanvas, tankSideCanvas: tankSideCanvas,
     makeCanvas: makeCanvas, hash2: hash2
   };

@@ -84,8 +84,13 @@
   var ENEMIES = {
     scout:   { hp: 22, speed: 145, damage: 8,  bulletSpeed: 220, fireInterval: 2.2, score: 10, color: 'scout' },
     assault: { hp: 45, speed: 105, damage: 10, bulletSpeed: 240, fireInterval: 1.9, score: 20, color: 'assault' },
-    heavy:   { hp: 95, speed: 65,  damage: 15, bulletSpeed: 200, fireInterval: 2.6, score: 40, color: 'heavy' }
+    heavy:   { hp: 95, speed: 65,  damage: 15, bulletSpeed: 200, fireInterval: 2.6, score: 40, color: 'heavy' },
+    missile: { hp: 30, speed: 95,  damage: 9,  bulletSpeed: 280, fireInterval: 3.0, score: 30, color: 'missile', burst: 3, range: 520 }
   };
+
+  // Battlefield themes rotate per floor: 0 绿野 / 1 河谷 / 2 钢铁.
+  var FLOOR_THEMES = ['grass', 'valley', 'steel'];
+  function floorTheme(floor) { return FLOOR_THEMES[(floor - 1) % FLOOR_THEMES.length]; }
 
   var BASE = { hp: 100, maxHp: 100, shield: 50, maxShield: 50 };
 
@@ -94,12 +99,14 @@
   function floorComposition(floor) {
     var n = floorEnemyCount(floor), list = [];
     var heavy = floor >= 3 ? 4 : (floor >= 2 ? 2 : 0);
+    var missile = floor >= 3 ? 3 : (floor >= 2 ? 2 : 0);
     var assault = Math.floor(n * 0.4);
-    var scout = n - heavy - assault;
+    var scout = n - heavy - missile - assault;
     var i;
     for (i = 0; i < scout; i++) list.push('scout');
     for (i = 0; i < assault; i++) list.push('assault');
     for (i = 0; i < heavy; i++) list.push('heavy');
+    for (i = 0; i < missile; i++) list.push('missile');
     // shuffle (Fisher-Yates)
     for (i = list.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
@@ -199,7 +206,8 @@
 
   var api = {
     TILE: TILE, COLS: COLS, ROWS: ROWS, TOTAL_FLOORS: TOTAL_FLOORS,
-    FLOOR_NAMES: FLOOR_NAMES, MAPS: MAPS, PLAYER: PLAYER, ENEMIES: ENEMIES, BASE: BASE,
+    FLOOR_NAMES: FLOOR_NAMES, FLOOR_THEMES: FLOOR_THEMES, floorTheme: floorTheme,
+    MAPS: MAPS, PLAYER: PLAYER, ENEMIES: ENEMIES, BASE: BASE,
     UPGRADES: UPGRADES, byId: byId, draftChoices: draftChoices, applyUpgrade: applyUpgrade,
     floorEnemyCount: floorEnemyCount, floorComposition: floorComposition,
     scrapForKill: scrapForKill, streakTracker: streakTracker, fmtTime: fmtTime,

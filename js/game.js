@@ -22,6 +22,33 @@
   }
   function dist(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
 
+  /* Ground texture pick per theme, from a deterministic 0..1 hash. */
+  function pickGroundTex(theme, h) {
+    if (theme === 'grass') {
+      if (h > 0.90) return 'tile-flowers';
+      if (h > 0.64) return 'tile-grass';
+      if (h > 0.40) return 'tile-ground2';
+      if (h > 0.34) return 'tile-path';
+      if (h > 0.30) return 'tile-crater';
+      return 'tile-ground';
+    }
+    if (theme === 'steel') {
+      if (h > 0.78) return 'tile-gravel';
+      if (h > 0.52) return 'tile-ground2';
+      if (h > 0.44) return 'tile-crater';
+      if (h > 0.38) return 'tile-path';
+      if (h > 0.33) return 'tile-grass';
+      return 'tile-ground';
+    }
+    // valley
+    if (h > 0.88) return 'tile-grass';
+    if (h > 0.62) return 'tile-ground2';
+    if (h > 0.52) return 'tile-path';
+    if (h > 0.44) return 'tile-crater';
+    if (h > 0.36) return 'tile-gravel';
+    return 'tile-ground';
+  }
+
   var BattleScene = new Phaser.Class({
     Extends: Phaser.Scene,
     initialize: function BattleScene() { Phaser.Scene.call(this, { key: 'Battle' }); },
@@ -53,7 +80,9 @@
       sceneRef = this;
       this.physics.resume();
       S.buildTextures(this);
-      this.cameras.main.setBackgroundColor('#8a6a45');
+      this.theme = L.floorTheme(this.floor);
+      S.buildGroundTextures(this, this.theme);
+      this.cameras.main.setBackgroundColor(this.theme === 'grass' ? '#79ad54' : (this.theme === 'steel' ? '#7d7768' : '#8a6a45'));
 
       var map = L.MAPS[this.floor - 1];
       // mutable char grid (bricks removed on destruction) for enemy navigation
@@ -68,8 +97,18 @@
           var ch = map[r][c];
           var x = c * TILE + TILE / 2, y = r * TILE + TILE / 2;
           var h = S.hash2(c, r);
-          var gtex = h > 0.82 ? 'tile-grass' : (h > 0.45 ? 'tile-ground2' : 'tile-ground');
+          var gtex = pickGroundTex(this.theme, h);
           this.add.image(x, y, gtex).setDepth(0);
+          // decorations on open ground (never on spawn row, player spawn, or near base)
+          if (ch === '.' && r > 0 && !(c === 7 && r === basePos.row - 2) &&
+              Math.abs(c - basePos.col) + Math.abs(r - basePos.row) > 2) {
+            var dh = S.hash2(c * 3 + 1, r * 7 + 2);
+            if (dh < 0.07) {
+              var dk = S.hash2(c * 11 + 5, r * 13 + 3);
+              var kind = dk < 0.15 ? 'wreck' : (dk < 0.4 ? 'barrel' : (dk < 0.6 ? 'sandbag' : (dk < 0.8 ? 'rock' : 'tuft')));
+              this.add.image(x, y, 'decor-' + kind).setDepth(0.5);
+            }
+          }
           if (ch === '#') {
             var b = this.walls.create(x, y, 'tile-brick');
             b.setData('brick', true); b.refreshBody(); b.setDepth(1);
@@ -180,6 +219,10 @@
       chassis.setCollideWorldBounds(true);
       chassis.setDepth(5);
       var turret = this.add.image(x, y, 'turret-' + type).setDepth(6);
+      // per-type silhouette scale (scout small/nimble, heavy big, boss huge)
+      var escale = { scout: 0.88, assault: 1, heavy: 1.06, missile: 0.92, boss: 1.4 }[type] || 1;
+      chassis.setScale(escale);
+      turret.setScale(escale);
       var barBg = this.add.rectangle(x, y - 24, 30, 5, 0x101018).setDepth(7).setVisible(false);
       var barFg = this.add.rectangle(x, y - 24, 28, 3, 0xe5484d).setDepth(7).setVisible(false);
       var e = {
@@ -569,14 +612,23 @@
       if (time > e.fireAt && !this.over) {
         var pd = dist(c.x, c.y, this.player.x, this.player.y);
         var bd = dist(c.x, c.y, this.base.x, this.base.y);
+        var range = e.def.range || 420;
         var tgt = null;
         if (e.target === 'base' && bd < 320) tgt = { x: this.base.x, y: this.base.y };
-        else if (pd < 420) tgt = { x: this.player.x, y: this.player.y };
+        else if (pd < range) tgt = { x: this.player.x, y: this.player.y };
         if (tgt) {
           e.fireAt = time + e.def.fireInterval * 1000 * (0.8 + Math.random() * 0.5);
-          var a = angleTo(c.x, c.y, tgt.x, tgt.y) + (Math.random() - 0.5) * 0.18;
-          var mxp = c.x + Math.cos(a) * 18, myp = c.y + Math.sin(a) * 18;
-          this.fireBullet(mxp, myp, a, false, e.def.damage, e.def.bulletSpeed, false);
+          var self = this;
+          var shots = e.def.burst || 1;
+          for (var bi = 0; bi < shots; bi++) {
+            (function (k) {
+              self.time.delayedCall(k * 130, function () {
+                if (e.hp <= 0 || self.over || self.clearing) return;
+                var a = angleTo(c.x, c.y, tgt.x, tgt.y) + (Math.random() - 0.5) * 0.14;
+                self.fireBullet(c.x + Math.cos(a) * 18, c.y + Math.sin(a) * 18, a, false, e.def.damage, e.def.bulletSpeed, false);
+              });
+            })(bi);
+          }
         } else {
           e.fireAt = time + 500;
         }
