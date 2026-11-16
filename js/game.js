@@ -219,9 +219,22 @@
       if (!this.spawnQueue.length) return;
       this._spawnedAny = true;
       var type = this.spawnQueue.shift();
-      var def = L.ENEMIES[type];
       var col = SPAWN_COLS[Math.floor(Math.random() * SPAWN_COLS.length)];
-      var x = col * TILE + TILE / 2, y = TILE / 2;
+      this.makeEnemy(type, col * TILE + TILE / 2, TILE / 2);
+    },
+
+    // boss-summoned escort (not from the spawn queue)
+    spawnEscort: function (x, y) {
+      var e = this.makeEnemy('scout', x, y);
+      if (e) e.escort = true;
+      return e;
+    },
+
+    makeEnemy: function (type, x, y) {
+      var def = L.ENEMIES[type];
+      if (!def) return null;
+      // floor HP scaling applies to regular enemies, not the boss (flat 600)
+      var hp = type === 'boss' ? def.hp : Math.round(def.hp * L.floorHpScale(this.floor));
       var chassis = this.enemyGroup.create(x, y, 'chassis-' + type);
       chassis.body.setSize(26, 26);
       chassis.body.setOffset(3, 3);
@@ -236,16 +249,18 @@
       var barFg = this.add.rectangle(x, y - 24, 28, 3, 0xe5484d).setDepth(7).setVisible(false);
       var e = {
         chassis: chassis, turret: turret, type: type, def: def,
-        hp: def.hp, maxHp: def.hp, barBg: barBg, barFg: barFg,
+        hp: hp, maxHp: hp, barBg: barBg, barFg: barFg,
         angle: Math.PI / 2, turretAngle: Math.PI / 2,
         retargetAt: 0, fireAt: this.time.now + 1200 + Math.random() * 1200,
         escapeUntil: 0, escapeAngle: 0, stuckAt: this.time.now + 600,
-        lastX: x, lastY: y, target: 'player'
+        lastX: x, lastY: y, target: 'player',
+        summonAt: this.time.now + 8000
       };
       chassis.setData('enemy', e);
       this.enemies.push(e);
       var star = this.add.image(x, y, 'star').setDepth(8).setScale(1.6).setAlpha(0.9);
       this.tweens.add({ targets: star, scale: 0.4, alpha: 0, duration: 350, onComplete: function () { star.destroy(); } });
+      return e;
     },
 
     fireBullet: function (x, y, angle, friendly, damage, speed, explosive, opts) {
@@ -463,7 +478,11 @@
       if (e.hp <= 0) {
         var x = e.chassis.x, y = e.chassis.y;
         if (Snd) Snd.play('explosion', e.type === 'heavy' || e.type === 'boss');
-        this.explodeAt(x, y, e.type === 'heavy');
+        this.explodeAt(x, y, e.type === 'heavy' || e.type === 'boss');
+        if (e.type === 'boss') {
+          this.cameras.main.shake(400, 0.02);
+          this.floatText(x, y - 30, 'BOSS 击破！ +500', '#ffd23e', 18);
+        }
         this.cameras.main.shake(90, 0.006);
         var scrap = L.scrapForKill(e.type);
         this.run.kills++;
@@ -717,6 +736,18 @@
         return;
       }
       if (e.stunnedUntil) { e.stunnedUntil = 0; c.clearTint(); if (e.turret) e.turret.clearTint(); }
+      // boss summon: every 8s call a scout escort (max 3 alive)
+      if (e.type === 'boss' && time > (e.summonAt || 0)) {
+        e.summonAt = time + 8000;
+        var escorts = 0;
+        for (var ei = 0; ei < this.enemies.length; ei++) if (this.enemies[ei].escort) escorts++;
+        if (escorts < 3 && !this.over && !this.clearing) {
+          var sx = Phaser.Math.Clamp(c.x + (Math.random() - 0.5) * 96, 24, W - 24);
+          var sy = Phaser.Math.Clamp(c.y + (Math.random() - 0.5) * 96, 24, H - 24);
+          this.spawnEscort(sx, sy);
+          this.floatText(c.x, c.y - 34, '召唤增援', '#ff9a1f', 13);
+        }
+      }
       // retarget
       if (time > e.retargetAt) {
         e.retargetAt = time + 2000 + Math.random() * 2000;
@@ -804,12 +835,14 @@
         if (tgt) {
           e.fireAt = time + e.def.fireInterval * 1000 * (0.8 + Math.random() * 0.5);
           var self = this;
-          var shots = e.def.burst || 1;
+          // boss fires a 3-way spread; missile fires a 3-round burst
+          var shots = e.type === 'boss' ? 3 : (e.def.burst || 1);
           for (var bi = 0; bi < shots; bi++) {
             (function (k) {
               self.time.delayedCall(k * 130, function () {
                 if (e.hp <= 0 || self.over || self.clearing) return;
-                var a = angleTo(c.x, c.y, tgt.x, tgt.y) + (Math.random() - 0.5) * 0.14;
+                var spread = e.type === 'boss' ? (k - 1) * 0.28 : 0;
+                var a = angleTo(c.x, c.y, tgt.x, tgt.y) + spread + (Math.random() - 0.5) * 0.14;
                 if (k === 0 && Snd) Snd.play('enemyFire');
                 self.fireBullet(c.x + Math.cos(a) * 18, c.y + Math.sin(a) * 18, a, false, e.def.damage, e.def.bulletSpeed, false);
               });

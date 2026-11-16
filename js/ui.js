@@ -320,6 +320,9 @@
   function onFloorClear() {
     G.setPaused(true);
     run.stats.hp = run.stats.maxHp; // full repair between floors (base game rule)
+    // trust the scene's floor (authoritative) over the UI counter
+    var hud = G.getHud();
+    if (hud && hud.floor) run.floor = hud.floor;
     if (run.floor >= L.TOTAL_FLOORS) {
       finishRun(true, '全部楼层已通关');
       return;

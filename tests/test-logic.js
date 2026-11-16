@@ -10,7 +10,9 @@ function eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 
 // maps
 t('maps validate', L.validateMaps().length === 0);
-t('map size 15x20', L.COLS === 15 && L.ROWS === 20 && L.MAPS.length === 3);
+t('map size 15x20', L.COLS === 15 && L.ROWS === 20 && L.MAPS.length === 16);
+t('16 floors, 16 names', L.TOTAL_FLOORS === 16 && L.FLOOR_NAMES.length === 16);
+t('all bases at (7,18)', (() => { for (let f = 1; f <= 16; f++) { const b = L.findBase(f); if (!b || b.col !== 7 || b.row !== 18) return false; } return true; })());
 t('base exists each floor', [1, 2, 3].every(f => !!L.findBase(f)));
 t('base bottom area', L.findBase(1).row >= 17 && L.findBase(1).col === 7);
 t('top row clear for spawns', L.MAPS.every(m => m[0] === '...............'));
@@ -33,6 +35,16 @@ t('F3 has 3 missile', L.floorComposition(3).filter(x => x === 'missile').length 
 t('composition length still matches', L.floorComposition(3).length === 14 && L.floorComposition(2).length === 12);
 t('scrap missile 30', L.scrapForKill('missile') === 30);
 t('floorTheme cycles', L.floorTheme(1) === 'grass' && L.floorTheme(2) === 'valley' && L.floorTheme(3) === 'steel' && L.floorTheme(4) === 'grass');
+
+// phase 6: 16 floors + boss
+t('enemy count caps at 30', L.floorEnemyCount(11) === 30 && L.floorEnemyCount(16) === 30 && L.floorEnemyCount(1) === 10);
+t('F4 composition heavy 6 missile 4', (() => { const c = L.floorComposition(4); return c.length === 16 && c.filter(x => x === 'heavy').length === 6 && c.filter(x => x === 'missile').length === 4; })());
+t('F15 composition length 30', L.floorComposition(15).length === 30);
+t('F16 boss first, 8 total', (() => { const c = L.floorComposition(16); return c[0] === 'boss' && c.length === 8 && c.filter(x => x === 'boss').length === 1; })());
+t('boss def 600hp 500 score', L.ENEMIES.boss && L.ENEMIES.boss.hp === 600 && L.ENEMIES.boss.score === 500);
+t('hp scale F1=1 F16=1.9', L.floorHpScale(1) === 1 && Math.abs(L.floorHpScale(16) - 1.9) < 1e-9);
+t('floorTheme cycles 16 floors', L.floorTheme(16) === 'grass' && L.floorTheme(15) === 'steel' && L.floorTheme(14) === 'valley');
+t('boss map is open arena', L.MAPS[15][10].indexOf('E') < 0 && L.MAPS[15][16] === '...............');
 
 // phase 3: weapons
 t('6 weapons, unique ids', L.WEAPONS.length === 6 && new Set(L.WEAPONS.map(w => w.id)).size === 6);
@@ -74,12 +86,16 @@ t('rankStats aggregates', (() => { const r = L.rankStats(H); return r.runs === 3
 
 // draft
 t('draft 3 distinct', (() => { const d = L.draftChoices(3, []); return d.length === 3 && new Set(d.map(u => u.id)).size === 3; })());
+t('draft never empties (16 floors)', (() => { const all = L.UPGRADES.map(u => u.id); const d = L.draftChoices(3, all); return d.length === 3; })());
+t('one-time upgrades excluded once owned', (() => { const d = L.draftChoices(3, ['split', 'explosive']); return d.every(u => u.id !== 'split' && u.id !== 'explosive'); })());
+t('rapid cooldown floors at 0.12', (() => { let s = L.freshStats(); for (let i = 0; i < 10; i++) s = L.applyUpgrade(s, 'rapid'); return s.fireCooldown >= 0.12; })());
 t('draft respects exclusions', (() => {
   const d = L.draftChoices(3, ['split', 'explosive', 'nano']);
-  return d.every(u => ['velocity', 'armor', 'rapid'].indexOf(u.id) >= 0);
+  return d.every(u => ['nano', 'velocity', 'armor', 'rapid'].indexOf(u.id) >= 0) &&
+    d.every(u => u.id !== 'split' && u.id !== 'explosive');
 })());
 t('draft terminates on degenerate rng', L.draftChoices(3, [], () => 0.5).length === 3);
-t('draft pool small returns all', L.draftChoices(3, ['split', 'explosive', 'nano', 'velocity']).length === 2);
+t('draft pool small returns all', L.draftChoices(3, ['split', 'explosive', 'nano', 'velocity']).length === 3);
 t('byId finds split', L.byId('split') && L.byId('split').name === '分裂炮管');
 t('byId unknown null', L.byId('nope') === null);
 

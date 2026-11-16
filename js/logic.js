@@ -5,12 +5,16 @@
   'use strict';
 
   var TILE = 32, COLS = 15, ROWS = 20;
-  var TOTAL_FLOORS = 3;
+  var TOTAL_FLOORS = 16;
 
-  var FLOOR_NAMES = ['绿野前线', '河谷裂带', '钢铁要塞'];
+  var FLOOR_NAMES = [
+    '绿野前线', '河谷裂带', '钢铁要塞', '烈焰荒原', '迷雾沼泽', '雪原哨站',
+    '熔岩裂谷', '废弃都市', '雷霆高原', '幽暗矿坑', '风暴海岸', '锈蚀工厂',
+    '寒霜山口', '荒漠遗迹', '终焉防线', '王座要塞'
+  ];
 
   // Map legend: '.' ground '#' brick 'S' steel '~' river 'T' bush 'E' base
-  var MAPS = [
+  var BASE_MAPS = [
     [ // Floor 1 - 绿野前线
       '...............',
       '..##...###...##',
@@ -79,13 +83,63 @@
     ]
   ];
 
+  // Boss arena (floor 16): open ground with steel pillars, base at (7,18)
+  var BOSS_MAP = [
+    '...............',
+    '.S...........S.',
+    '.S...........S.',
+    '...............',
+    '...S.......S...',
+    '...S.......S...',
+    '...............',
+    '......S.S......',
+    '......S.S......',
+    '...............',
+    '..S.........S..',
+    '..S.........S..',
+    '...............',
+    '....S.....S....',
+    '....S.....S....',
+    '...............',
+    '...............',
+    '..##.......##..',
+    '..##...E...##..',
+    '...............'
+  ];
+
+  // Map variants: mirror (col 7 is the axis, so base/spawn stay put),
+  // steelify (top-half bricks become indestructible steel),
+  // band (extra brick wall at row 10 with two gaps).
+  function mirrorMap(m) {
+    return m.map(function (row) { return row.split('').reverse().join(''); });
+  }
+  function steelifyMap(m) {
+    return m.map(function (row, ri) {
+      return (ri >= 1 && ri <= 9) ? row.replace(/#/g, 'S') : row;
+    });
+  }
+  function bandMap(m) {
+    var out = m.slice();
+    out[10] = '###.#######.###';
+    return out;
+  }
+  var MAPS = [
+    BASE_MAPS[0], BASE_MAPS[1], BASE_MAPS[2],
+    mirrorMap(BASE_MAPS[0]), mirrorMap(BASE_MAPS[1]), mirrorMap(BASE_MAPS[2]),
+    steelifyMap(BASE_MAPS[0]), steelifyMap(BASE_MAPS[1]), steelifyMap(BASE_MAPS[2]),
+    bandMap(mirrorMap(BASE_MAPS[0])), bandMap(mirrorMap(BASE_MAPS[1])), bandMap(mirrorMap(BASE_MAPS[2])),
+    bandMap(steelifyMap(BASE_MAPS[0])), bandMap(steelifyMap(BASE_MAPS[1])), bandMap(steelifyMap(BASE_MAPS[2])),
+    BOSS_MAP
+  ];
+
   var PLAYER = { hp: 120, maxHp: 120, speed: 175, bulletSpeed: 460, damage: 38, fireCooldown: 0.32, radius: 13 };
 
   var ENEMIES = {
     scout:   { hp: 22, speed: 145, damage: 8,  bulletSpeed: 220, fireInterval: 2.2, score: 10, color: 'scout' },
     assault: { hp: 45, speed: 105, damage: 10, bulletSpeed: 240, fireInterval: 1.9, score: 20, color: 'assault' },
     heavy:   { hp: 95, speed: 65,  damage: 15, bulletSpeed: 200, fireInterval: 2.6, score: 40, color: 'heavy' },
-    missile: { hp: 30, speed: 95,  damage: 9,  bulletSpeed: 280, fireInterval: 3.0, score: 30, color: 'missile', burst: 3, range: 520 }
+    missile: { hp: 30, speed: 95,  damage: 9,  bulletSpeed: 280, fireInterval: 3.0, score: 30, color: 'missile', burst: 3, range: 520 },
+    boss:    { hp: 600, speed: 55, damage: 18, bulletSpeed: 300, fireInterval: 1.6, score: 500, color: 'boss', range: 480 }
   };
 
   // Battlefield themes rotate per floor: 0 绿野 / 1 河谷 / 2 钢铁.
@@ -94,12 +148,19 @@
 
   var BASE = { hp: 100, maxHp: 100, shield: 50, maxShield: 50 };
 
-  function floorEnemyCount(floor) { return 10 + (floor - 1) * 2; }
+  function floorEnemyCount(floor) { return Math.min(30, 10 + (floor - 1) * 2); }
+
+  // enemy HP multiplier by floor (boss excluded: flat 600 HP)
+  function floorHpScale(floor) { return 1 + 0.06 * (floor - 1); }
 
   function floorComposition(floor) {
+    // floor 16: boss + escorts, boss spawns first (no shuffle)
+    if (floor === TOTAL_FLOORS) {
+      return ['boss', 'scout', 'scout', 'assault', 'missile', 'scout', 'assault', 'heavy'];
+    }
     var n = floorEnemyCount(floor), list = [];
-    var heavy = floor >= 3 ? 4 : (floor >= 2 ? 2 : 0);
-    var missile = floor >= 3 ? 3 : (floor >= 2 ? 2 : 0);
+    var heavy = floor >= 2 ? Math.min(6, 2 * (floor - 1)) : 0;
+    var missile = floor >= 2 ? Math.min(6, floor) : 0;
     var assault = Math.floor(n * 0.4);
     var scout = n - heavy - missile - assault;
     var i;
@@ -121,12 +182,12 @@
     { id: 'explosive', name: '高爆弹', rarity: 'epic', rarityZh: '史诗·紫色', color: '#a855f7', dark: '#7c3aed',
       desc: '命中范围爆炸，对周围敌人造成伤害', tags: '爆炸范围扩大 | 范围伤害', icon: 'bomb' },
     { id: 'nano',    name: '纳米修复', rarity: 'rare',  rarityZh: '稀有·橙色', color: '#f97316', dark: '#c2570b',
-      desc: '每秒恢复装甲 8 点，持续 10 秒', tags: '护甲提升 | 持续恢复', icon: 'nano' },
+      desc: '每秒恢复装甲 8 点，持续 10 秒', tags: '护甲提升 | 持续恢复', icon: 'nano', repeatable: true },
     { id: 'velocity', name: '高膛压穿甲弹', rarity: 'common', rarityZh: '普通·青色', color: '#22c55e', dark: '#15803d',
-      desc: '炮弹速度 +35%，伤害 +15%', tags: '弹速提升 | 伤害提升', icon: 'bolt' },
+      desc: '炮弹速度 +35%，伤害 +15%', tags: '弹速提升 | 伤害提升', icon: 'bolt', repeatable: true },
     { id: 'armor',   name: '加厚复合装甲', rarity: 'common', rarityZh: '普通·青色', color: '#22c55e', dark: '#15803d',
-      desc: '装甲上限 +40，并立即修复 40 点', tags: '生命上限 | 立即修复', icon: 'shield' },
-    { id: 'rapid',   name: '双路自动装弹机', rarity: 'common', rarityZh: '普通·青色', color: '#22c55e', dark: '#15803d',
+      desc: '装甲上限 +40，并立即修复 40 点', tags: '生命上限 | 立即修复', icon: 'shield', repeatable: true },
+    { id: 'rapid',   name: '双路自动装弹机', rarity: 'common', rarityZh: '普通·青色', color: '#22c55e', dark: '#15803d', repeatable: true,
       desc: '主炮装填冷却缩短 25%', tags: '射速提升 | 持续输出', icon: 'clock' }
   ];
 
@@ -256,7 +317,8 @@
   function draftChoices(count, excludeIds, rand) {
     rand = rand || Math.random;
     excludeIds = excludeIds || [];
-    var pool = UPGRADES.filter(function (u) { return excludeIds.indexOf(u.id) < 0; });
+    // repeatable upgrades stay in the pool (16 floors need 15 drafts; 6 upgrades would run out)
+    var pool = UPGRADES.filter(function (u) { return u.repeatable || excludeIds.indexOf(u.id) < 0; });
     if (pool.length <= count) return pool.slice();
     // Fisher-Yates with injected rng, then take first `count` (always terminates).
     for (var i = pool.length - 1; i > 0; i--) {
@@ -275,7 +337,7 @@
     else if (id === 'nano') { s.nanoUntil = (s.nanoUntil || 0) + 10; s.nanoRate = 8; }
     else if (id === 'velocity') { s.bulletSpeed = Math.round(s.bulletSpeed * 1.35); s.damage = Math.round(s.damage * 1.15); }
     else if (id === 'armor') { s.maxHp += 40; s.hp = Math.min(s.maxHp, s.hp + 40); }
-    else if (id === 'rapid') s.fireCooldown = +(s.fireCooldown * 0.75).toFixed(3);
+    else if (id === 'rapid') s.fireCooldown = +Math.max(0.12, s.fireCooldown * 0.75).toFixed(3);
     return s;
   }
 
@@ -331,7 +393,7 @@
     armoryLevel: armoryLevel, applyArmory: applyArmory,
     MAX_HISTORY: MAX_HISTORY, recordRun: recordRun, bestFloorOf: bestFloorOf,
     bestKillsOf: bestKillsOf, bestTimeOf: bestTimeOf, rankStats: rankStats,
-    floorEnemyCount: floorEnemyCount, floorComposition: floorComposition,
+    floorEnemyCount: floorEnemyCount, floorComposition: floorComposition, floorHpScale: floorHpScale,
     scrapForKill: scrapForKill, streakTracker: streakTracker, fmtTime: fmtTime,
     validateMaps: validateMaps, findBase: findBase
   };
