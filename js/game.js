@@ -3,7 +3,7 @@
    DOM owns menus/HUD; this module owns the battlefield canvas only. */
 (function (global) {
   'use strict';
-  var L = global.RBLogic, S = global.RBSprites;
+  var L = global.RBLogic, S = global.RBSprites, Snd = global.RBSound;
 
   var W = 480, H = 640, TILE = 32;
   var SPAWN_COLS = [1, 7, 13];
@@ -169,7 +169,8 @@
       // --- particles ---
       this.boom1 = this.add.particles(0, 0, 'px', { speed: { min: 40, max: 170 }, lifespan: 450, quantity: 0, scale: { start: 3, end: 0 }, tint: 0xff9a1f });
       this.boom2 = this.add.particles(0, 0, 'px', { speed: { min: 20, max: 110 }, lifespan: 300, quantity: 0, scale: { start: 2, end: 0 }, tint: 0xffd23e });
-      this.boom1.setDepth(9); this.boom2.setDepth(9);
+      this.smoke = this.add.particles(0, 0, 'px', { speed: { min: 5, max: 26 }, lifespan: 850, quantity: 0, scale: { start: 4, end: 9 }, tint: 0x6b7280, alpha: { start: 0.55, end: 0 }, gravityY: -28 });
+      this.boom1.setDepth(9); this.boom2.setDepth(9); this.smoke.setDepth(8);
 
       // --- input ---
       this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE');
@@ -261,18 +262,26 @@
         var off = (i - (n - 1) / 2) * 0.09;
         this.fireBullet(mx, my, this.turretAngle + off, true, this.stats.damage, this.stats.bulletSpeed, !!this.stats.explosive);
       }
-      var fl = this.add.image(mx, my, 'star').setDepth(8).setScale(0.7).setAlpha(0.95);
-      this.tweens.add({ targets: fl, scale: 1.1, alpha: 0, duration: 130, onComplete: function () { fl.destroy(); } });
+      if (Snd) Snd.play('fire');
+      // muzzle flash: bright star + expanding glow
+      var fl = this.add.image(mx, my, 'star').setDepth(8).setScale(0.9).setAlpha(1);
+      this.tweens.add({ targets: fl, scale: 1.5, alpha: 0, duration: 140, onComplete: function () { fl.destroy(); } });
+      var glow = this.add.circle(mx, my, 5, 0xffd23e, 0.55).setDepth(8);
+      this.tweens.add({ targets: glow, scale: 2.6, alpha: 0, duration: 160, onComplete: function () { glow.destroy(); } });
     },
 
     explodeAt: function (x, y, big) {
       this.boom1.explode(big ? 22 : 12, x, y);
       this.boom2.explode(big ? 14 : 8, x, y);
+      this.smoke.explode(big ? 10 : 5, x, y);
+      // shockwave ring
+      var ring = this.add.circle(x, y, 6).setStrokeStyle(big ? 4 : 3, big ? 0xff9a1f : 0xffd23e).setDepth(8);
+      this.tweens.add({ targets: ring, scale: big ? 4.5 : 2.8, alpha: 0, duration: big ? 380 : 260, onComplete: function () { ring.destroy(); } });
     },
 
-    floatText: function (x, y, str, color) {
+    floatText: function (x, y, str, color, size) {
       var t = this.add.text(x, y, str, {
-        fontFamily: '"Fusion Pixel", sans-serif', fontSize: '15px', color: color || '#ffd23e',
+        fontFamily: '"Fusion Pixel", sans-serif', fontSize: (size || 15) + 'px', color: color || '#ffd23e',
         stroke: '#101018', strokeThickness: 4
       }).setOrigin(0.5).setDepth(10);
       this.tweens.add({ targets: t, y: y - 26, alpha: 0, duration: 850, onComplete: function () { t.destroy(); } });
@@ -298,6 +307,8 @@
       var x = bul.x, y = bul.y;
       bul.disableBody(true, true);
       if (!e) return;
+      this.floatText(x, y - 12, '-' + dmg, '#ffffff', 12);
+      if (Snd) Snd.play('hit');
       this.damageEnemy(e, dmg);
       if (boom) {
         this.explodeAt(x, y, true);
@@ -319,6 +330,7 @@
       this.time.delayedCall(60, function () { e.chassis.clearTint(); e.turret.clearTint(); });
       if (e.hp <= 0) {
         var x = e.chassis.x, y = e.chassis.y;
+        if (Snd) Snd.play('explosion', e.type === 'heavy' || e.type === 'boss');
         this.explodeAt(x, y, e.type === 'heavy');
         this.cameras.main.shake(90, 0.006);
         var scrap = L.scrapForKill(e.type);
@@ -347,6 +359,7 @@
       if (this.time.now < this.invulnUntil) return;
       this.invulnUntil = this.time.now + 600;
       this.playerHp -= dmg;
+      if (Snd) Snd.play('explosion', false);
       this.player.setTintFill(0xff4444);
       this.turret.setTintFill(0xff4444);
       var self = this;
@@ -374,6 +387,7 @@
         this.baseShield -= absorbed; rest -= absorbed;
       }
       if (rest > 0) this.baseHp -= rest;
+      if (Snd) Snd.play('explosion', true);
       this.cameras.main.shake(140, 0.012);
       this.explodeAt(x, y, true);
       this.base.setTintFill(0xff4444);
@@ -388,6 +402,7 @@
     defeat: function (reason) {
       if (this.over) return;
       this.over = true;
+      if (Snd) Snd.play('defeat');
       var x = reason === 'base' ? this.base.x : this.player.x;
       var y = reason === 'base' ? this.base.y : this.player.y;
       this.explodeAt(x, y, true);
@@ -405,6 +420,7 @@
     floorClear: function () {
       if (this.clearing || this.over) return;
       this.clearing = true;
+      if (Snd) Snd.play('floorClear');
       this.wave = this.wave; // waves counted on spawn exhaustion
       var t = this.add.text(W / 2, H / 2 - 40, '楼层清理完成!', {
         fontFamily: '"Fusion Pixel", sans-serif', fontSize: '30px', color: '#7ded8a',
@@ -625,6 +641,7 @@
               self.time.delayedCall(k * 130, function () {
                 if (e.hp <= 0 || self.over || self.clearing) return;
                 var a = angleTo(c.x, c.y, tgt.x, tgt.y) + (Math.random() - 0.5) * 0.14;
+                if (k === 0 && Snd) Snd.play('enemyFire');
                 self.fireBullet(c.x + Math.cos(a) * 18, c.y + Math.sin(a) * 18, a, false, e.def.damage, e.def.bulletSpeed, false);
               });
             })(bi);

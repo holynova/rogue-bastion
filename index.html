@@ -103,6 +103,25 @@
     <div class="result-foot" id="result-foot"></div>
   </section>
 
+  <!-- ===== 设置 ===== -->
+  <section id="screen-settings" class="screen overlay">
+    <div class="ph-card">
+      <h2>设置</h2>
+      <label class="set-row">
+        <span class="set-label">音效</span>
+        <span class="set-desc">开火、爆炸与胜利音效</span>
+        <span class="set-toggle"><input type="checkbox" id="set-sound" checked><span class="track"></span></span>
+      </label>
+      <label class="set-row">
+        <span class="set-label">自动瞄准</span>
+        <span class="set-desc">炮塔自动锁定最近敌军</span>
+        <span class="set-toggle"><input type="checkbox" id="set-aim" checked><span class="track"></span></span>
+      </label>
+      <div class="set-note">音效由 Web Audio 实时合成，无需下载音频文件。</div>
+      <button id="btn-set-back" class="result-btn menu">返回</button>
+    </div>
+  </section>
+
   <!-- ===== 占位页 ===== -->
   <section id="screen-placeholder" class="screen overlay">
     <div class="ph-card">
@@ -117,6 +136,7 @@
 <script src="js/phaser.min.js"></script>
 <script src="js/logic.js"></script>
 <script src="js/sprites.js"></script>
+<script src="js/sound.js"></script>
 <script src="js/game.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>

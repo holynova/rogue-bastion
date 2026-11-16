@@ -1,7 +1,7 @@
 /* Rogue Bastion - DOM screens, HUD, touch controls, run flow. */
 (function (global) {
   'use strict';
-  var L = global.RBLogic, S = global.RBSprites, G = global.RBGame;
+  var L = global.RBLogic, S = global.RBSprites, G = global.RBGame, Snd = global.RBSound;
 
   var SAVE_KEY = 'rogue-bastion-save-v1';
   var save = loadSave();
@@ -26,8 +26,9 @@
     return d;
   }
   function showScreen(id) {
-    ['screen-menu', 'screen-battle', 'screen-draft', 'screen-result', 'screen-placeholder'].forEach(function (s) {
-      $(s).classList.toggle('active', s === id);
+    ['screen-menu', 'screen-battle', 'screen-draft', 'screen-result', 'screen-placeholder', 'screen-settings', 'screen-armory', 'screen-rank'].forEach(function (s) {
+      var n = $(s);
+      if (n) n.classList.toggle('active', s === id);
     });
     if (id === 'screen-draft' || id === 'screen-result') $('screen-battle').classList.add('active');
   }
@@ -57,8 +58,25 @@
     $('btn-start').addEventListener('click', startRun);
     $('btn-armory').addEventListener('click', function () { openPlaceholder('军械库', '武器、模块与永久升级，敬请期待。'); });
     $('btn-rank').addEventListener('click', function () { openPlaceholder('排行榜', '赛季排名与好友榜，敬请期待。'); });
-    $('btn-settings').addEventListener('click', function () { openPlaceholder('设置', '画面、音效与操作设置，敬请期待。'); });
+    $('btn-settings').addEventListener('click', function () { if (Snd) Snd.play('click'); showScreen('screen-settings'); });
     $('btn-ph-back').addEventListener('click', function () { showScreen('screen-menu'); });
+    buildSettings();
+  }
+
+  function buildSettings() {
+    var snd = $('set-sound'), aim = $('set-aim');
+    if (Snd) snd.checked = Snd.isEnabled();
+    aim.checked = $('aim-toggle').checked;
+    snd.addEventListener('change', function () {
+      if (Snd) { Snd.setEnabled(snd.checked); if (snd.checked) Snd.play('click'); }
+      toast(snd.checked ? '音效：开' : '音效：关');
+    });
+    aim.addEventListener('change', function () {
+      $('aim-toggle').checked = aim.checked;
+      G.input.autoAim = aim.checked;
+      toast(aim.checked ? '自动瞄准：开' : '自动瞄准：关（鼠标瞄准）');
+    });
+    $('btn-set-back').addEventListener('click', function () { if (Snd) Snd.play('click'); showScreen('screen-menu'); });
   }
 
   function updateMenuStats() {
@@ -194,6 +212,7 @@
   }
 
   function startRun() {
+    if (Snd) { Snd.unlock(); Snd.play('click'); }
     run = {
       floor: 1, kills: 0, scrap: 0, waves: 1, bestStreak: 0,
       startTime: Date.now(), endTime: 0, owned: [], stats: freshStats()
@@ -250,6 +269,7 @@
   }
 
   function pickUpgrade(u) {
+    if (Snd) Snd.play('pickup');
     run.stats = L.applyUpgrade(run.stats, u.id);
     run.owned.push(u.id);
     toast('获得强化：' + u.name);
@@ -264,6 +284,7 @@
   }
 
   function finishRun(victory, subtitle) {
+    if (victory && Snd) Snd.play('victory');
     run.endTime = Date.now();
     save.scrapTotal += run.scrap;
     if (run.floor > save.bestFloor) save.bestFloor = run.floor;
@@ -325,12 +346,14 @@
     detectTouch();
     $('btn-refresh').addEventListener('click', function () {
       if (!draftState || draftState.refreshes <= 0) return;
+      if (Snd) Snd.play('click');
       draftState.refreshes--;
       draftState.choices = L.draftChoices(3, run.owned);
       buildDraft();
     });
     $('btn-again').addEventListener('click', function () { G.destroy(); startRun(); });
     $('btn-to-menu').addEventListener('click', function () {
+      if (Snd) Snd.play('click');
       G.destroy();
       showScreen('screen-menu');
       updateMenuStats();
