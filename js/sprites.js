@@ -1,8 +1,10 @@
-/* Rogue Bastion - code-drawn cartoon pixel art.
-   Visual benchmark: v2 prototypes in ~/workspace/tank-compare/ui-prototypes/
-   (a-battle-v2 / a-draft-v2 / a-menu-v2 / a-result-v2). Colors sampled from
-   those images. Chunky pixels, thick black outlines, bright flat colors.
-   Nothing here is cropped from the prototype images. */
+/* Rogue Bastion - pixel art.
+   Tanks, ground/wall/river/path tiles and wreck/barrel/sandbag decor are
+   AI-generated pixel images (assets/, same style as the v2 prototypes in
+   ~/workspace/tank-compare/ui-prototypes/); each tank image was split into
+   a chassis + rotating turret. Bullets, icons, the shield core, steel/bush/
+   gravel/crater tiles and particles are still code-drawn below and serve as
+   fallback if an image file fails to load. */
 (function (global) {
   'use strict';
 
@@ -760,10 +762,44 @@
     return c;
   }
 
+  /* Texture keys supplied by generated image files (assets/, loaded in the
+     scene preload). buildTextures() keeps the file version when it exists and
+     falls back to the code-drawn canvas only if the file failed to load. */
+  var FILE_TEXTURES = {
+    'chassis-player': 'assets/chassis-player.png',
+    'chassis-scout': 'assets/chassis-scout.png',
+    'chassis-assault': 'assets/chassis-assault.png',
+    'chassis-heavy': 'assets/chassis-heavy.png',
+    'chassis-missile': 'assets/chassis-missile.png',
+    'chassis-boss': 'assets/chassis-boss.png',
+    'turret-player': 'assets/turret-player.png',
+    'turret-scout': 'assets/turret-scout.png',
+    'turret-assault': 'assets/turret-assault.png',
+    'turret-heavy': 'assets/turret-heavy.png',
+    'turret-missile': 'assets/turret-missile.png',
+    'turret-boss': 'assets/turret-boss.png',
+    'tile-ground-grass': 'assets/tile-ground.png',
+    'tile-ground-valley': 'assets/tile-ground-valley.png',
+    'tile-ground-steel': 'assets/tile-ground-steel.png',
+    'tile-ground2': 'assets/tile-ground2.png',
+    'tile-brick': 'assets/tile-brick.png',
+    'tile-river': 'assets/tile-river.png',
+    'tile-path': 'assets/tile-path.png',
+    'decor-wreck': 'assets/decor-wreck.png',
+    'decor-barrel': 'assets/decor-barrel.png',
+    'decor-sandbag': 'assets/decor-sandbag.png'
+  };
+
+  /* Load all generated image assets. Call inside scene preload(). */
+  function preloadAssets(scene) {
+    for (var k in FILE_TEXTURES) scene.load.image(k, FILE_TEXTURES[k]);
+  }
+
   /* Build all Phaser textures from canvases. Call inside scene preload/create. */
   function buildTextures(scene) {
     var tex = scene.textures;
     function add(key, canvas) {
+      if (FILE_TEXTURES[key] && tex.exists(key)) return; // file version wins
       if (tex.exists(key)) tex.remove(key);
       tex.addCanvas(key, canvas);
     }
@@ -788,7 +824,7 @@
     add('bullet-player', renderMap(BULLET_PLAYER, BULLET_PAL, 2));
     add('bullet-enemy', renderMap(BULLET_ENEMY, BULLET_PAL, 2));
     add('star', renderMap(STAR_MAP, STAR_PAL, 2));
-    add('tile-ground', drawTile('ground', 2, 1, 1));
+    add('icon-grenade', renderMap(ICONS.grenade.map, ICONS.grenade.pal, 2));
     add('tile-ground2', drawTile('ground', 2, 5, 9));
     add('tile-grass', drawTile('grass', 2, 3, 7));
     add('tile-path', drawTile('path', 2, 2, 6));
@@ -813,15 +849,23 @@
   }
 
   /* Rebuild the ground-family textures tinted for a floor theme.
-     Call after buildTextures() inside scene create (textures are replaced). */
+     Call after buildTextures() inside scene create (textures are replaced).
+     The main ground tile comes from the generated image (theme-tinted
+     variants preloaded as tile-ground-<theme>); canvas fallback if missing. */
   function buildGroundTextures(scene, theme) {
     var tex = scene.textures;
     function add(key, canvas) {
       if (tex.exists(key)) tex.remove(key);
       tex.addCanvas(key, canvas);
     }
-    add('tile-ground', drawTile('ground', 2, 1, 1, theme));
-    add('tile-ground2', drawTile('ground', 2, 5, 9, theme));
+    var gkey = theme === 'valley' ? 'tile-ground-valley' :
+               (theme === 'steel' ? 'tile-ground-steel' : 'tile-ground-grass');
+    if (tex.exists(gkey)) {
+      if (tex.exists('tile-ground')) tex.remove('tile-ground');
+      tex.addImage('tile-ground', tex.get(gkey).getSourceImage());
+    } else {
+      add('tile-ground', drawTile('ground', 2, 1, 1, theme));
+    }
     add('tile-grass', drawTile('grass', 2, 3, 7, theme));
     add('tile-flowers', drawTile('flowers', 2, 4, 8, theme));
     add('tile-crater', drawTile('crater', 2, 8, 3, theme));
@@ -841,7 +885,8 @@
     TANK_PALETTES: TANK_PALETTES, TANK_MAP: TANK_MAP, HEAVY_MAP: HEAVY_MAP,
     renderMap: renderMap, drawTile: drawTile, drawBase: drawBase, drawDecor: drawDecor,
     menuBackdrop: menuBackdrop, buildTextures: buildTextures,
-    buildGroundTextures: buildGroundTextures,
+    buildGroundTextures: buildGroundTextures, preloadAssets: preloadAssets,
+    FILE_TEXTURES: FILE_TEXTURES,
     iconCanvas: iconCanvas, tankSideCanvas: tankSideCanvas,
     makeCanvas: makeCanvas, hash2: hash2
   };

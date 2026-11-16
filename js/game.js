@@ -79,6 +79,10 @@
       this.baseHp = L.BASE.hp;
     },
 
+    preload: function () {
+      S.preloadAssets(this);
+    },
+
     create: function () {
       var self = this;
       sceneRef = this;
@@ -86,6 +90,9 @@
       S.buildTextures(this);
       this.theme = L.floorTheme(this.floor);
       S.buildGroundTextures(this, this.theme);
+      // generated tank textures are 64px, code-drawn fallback is 32px
+      var timg = this.textures.get('chassis-player').getSourceImage();
+      this.texScale = 32 / (timg ? timg.width : 32);
       this.cameras.main.setBackgroundColor(this.theme === 'grass' ? '#79ad54' : (this.theme === 'steel' ? '#7d7768' : '#8a6a45'));
 
       var map = L.MAPS[this.floor - 1];
@@ -107,10 +114,10 @@
           if (ch === '.' && r > 0 && !(c === 7 && r === basePos.row - 2) &&
               Math.abs(c - basePos.col) + Math.abs(r - basePos.row) > 2) {
             var dh = S.hash2(c * 3 + 1, r * 7 + 2);
-            if (dh < 0.07) {
+            if (dh < 0.05) {
               var dk = S.hash2(c * 11 + 5, r * 13 + 3);
               var kind = dk < 0.15 ? 'wreck' : (dk < 0.4 ? 'barrel' : (dk < 0.6 ? 'sandbag' : (dk < 0.8 ? 'rock' : 'tuft')));
-              this.add.image(x, y, 'decor-' + kind).setDepth(0.5);
+              this.add.image(x, y, 'decor-' + kind).setDepth(0.5).setScale(0.8);
             }
           }
           if (ch === '#') {
@@ -138,13 +145,13 @@
 
       // --- player ---
       var px = bx, py = (basePos.row - 2) * TILE + TILE / 2;
-      this.player = this.physics.add.image(px, py, 'chassis-player').setDepth(5);
+      this.player = this.physics.add.image(px, py, 'chassis-player').setDepth(5).setScale(this.texScale);
       this.player.body.setSize(26, 26);
       this.player.body.setOffset(3, 3);
       this.player.setCollideWorldBounds(true);
       this.playerHp = this.stats.hp;
       this.playerMaxHp = this.stats.maxHp;
-      this.turret = this.add.image(px, py, 'turret-player').setDepth(6);
+      this.turret = this.add.image(px, py, 'turret-player').setDepth(6).setScale(this.texScale);
       this.chassisAngle = -Math.PI / 2;
       this.turretAngle = -Math.PI / 2;
       this.playerBarBg = this.add.rectangle(px, py - 24, 30, 5, 0x101018).setDepth(7);
@@ -243,8 +250,8 @@
       var turret = this.add.image(x, y, 'turret-' + type).setDepth(6);
       // per-type silhouette scale (scout small/nimble, heavy big, boss huge)
       var escale = { scout: 0.88, assault: 1, heavy: 1.06, missile: 0.92, boss: 1.4 }[type] || 1;
-      chassis.setScale(escale);
-      turret.setScale(escale);
+      chassis.setScale(escale * this.texScale);
+      turret.setScale(escale * this.texScale);
       var barBg = this.add.rectangle(x, y - 24, 30, 5, 0x101018).setDepth(7).setVisible(false);
       var barFg = this.add.rectangle(x, y - 24, 28, 3, 0xe5484d).setDepth(7).setVisible(false);
       var e = {

@@ -46,9 +46,18 @@
 
   /* ---------- menu ---------- */
   function buildMenu() {
-    var bg = S.menuBackdrop(480, 800);
-    bg.id = 'menu-bg';
-    $('menu-backdrop').appendChild(bg);
+    var img = document.createElement('img');
+    img.id = 'menu-bg';
+    img.src = 'assets/menu-bg.jpg';
+    img.alt = '';
+    img.onerror = function () {
+      // fall back to the code-drawn backdrop if the image is unavailable
+      img.remove();
+      var bg = S.menuBackdrop(480, 800);
+      bg.id = 'menu-bg';
+      $('menu-backdrop').appendChild(bg);
+    };
+    $('menu-backdrop').appendChild(img);
 
     var side = S.tankSideCanvas(4);
     side.className = 'menu-btn-icon';
