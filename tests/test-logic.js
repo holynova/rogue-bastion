@@ -57,6 +57,21 @@ t('applyArmory shield 1 -> baseShield 65', L.applyArmory(L.freshStats(), { shiel
 t('applyArmory empty unchanged', (() => { const s = L.applyArmory(L.freshStats(), {}); return s.maxHp === 120 && s.damage === 38; })());
 t('applyArmory ignores unknown id', L.applyArmory(L.freshStats(), { nope: 3 }).damage === 38);
 
+// phase 5: run history / leaderboard
+const H = [
+  { date: '2026-11-16T10:00:00Z', floor: 2, kills: 15, scrap: 200, timeSec: 300, victory: false },
+  { date: '2026-11-16T11:00:00Z', floor: 3, kills: 22, scrap: 400, timeSec: 420, victory: true },
+  { date: '2026-11-16T12:00:00Z', floor: 1, kills: 8, scrap: 90, timeSec: 180, victory: false }
+];
+t('recordRun prepends', L.recordRun(H, { floor: 4 })[0].floor === 4);
+t('recordRun caps at 10', (() => { let h = []; for (let i = 0; i < 15; i++) h = L.recordRun(h, { floor: i }); return h.length === 10 && h[0].floor === 14; })());
+t('bestFloorOf', L.bestFloorOf(H) === 3);
+t('bestKillsOf', L.bestKillsOf(H) === 22);
+t('bestTimeOf victories only', L.bestTimeOf(H) === 420);
+t('bestTimeOf null without victory', L.bestTimeOf([H[0], H[2]]) === null);
+t('bestFloorOf empty 0', L.bestFloorOf([]) === 0);
+t('rankStats aggregates', (() => { const r = L.rankStats(H); return r.runs === 3 && r.bestFloor === 3 && r.bestKills === 22 && r.bestTime === 420; })());
+
 // draft
 t('draft 3 distinct', (() => { const d = L.draftChoices(3, []); return d.length === 3 && new Set(d.map(u => u.id)).size === 3; })());
 t('draft respects exclusions', (() => {

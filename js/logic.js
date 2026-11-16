@@ -198,6 +198,41 @@
     return item ? Math.max(0, Math.min(item.max, lvl)) : 0;
   }
 
+  /* Run history (local leaderboard): records {date, floor, kills, scrap, timeSec, victory}.
+     Newest first, capped at MAX_HISTORY. */
+  var MAX_HISTORY = 10;
+
+  function recordRun(history, rec) {
+    var out = [rec].concat(history || []);
+    return out.slice(0, MAX_HISTORY);
+  }
+
+  function bestFloorOf(history) {
+    return (history || []).reduce(function (m, r) { return Math.max(m, r.floor || 0); }, 0);
+  }
+
+  function bestKillsOf(history) {
+    return (history || []).reduce(function (m, r) { return Math.max(m, r.kills || 0); }, 0);
+  }
+
+  // fastest clear among victories only; null when no victory yet
+  function bestTimeOf(history) {
+    var best = null;
+    (history || []).forEach(function (r) {
+      if (r.victory && typeof r.timeSec === 'number' && (best === null || r.timeSec < best)) best = r.timeSec;
+    });
+    return best;
+  }
+
+  function rankStats(history) {
+    return {
+      runs: (history || []).length,
+      bestFloor: bestFloorOf(history),
+      bestKills: bestKillsOf(history),
+      bestTime: bestTimeOf(history)
+    };
+  }
+
   // apply permanent armory bonuses to a fresh stats object; returns a new object.
   function applyArmory(stats, armory) {
     var out = {};
@@ -294,6 +329,8 @@
     WEAPONS: WEAPONS, weaponById: weaponById, unlockedWeapons: unlockedWeapons,
     ARMORY_ITEMS: ARMORY_ITEMS, armoryItemById: armoryItemById, armoryCost: armoryCost,
     armoryLevel: armoryLevel, applyArmory: applyArmory,
+    MAX_HISTORY: MAX_HISTORY, recordRun: recordRun, bestFloorOf: bestFloorOf,
+    bestKillsOf: bestKillsOf, bestTimeOf: bestTimeOf, rankStats: rankStats,
     floorEnemyCount: floorEnemyCount, floorComposition: floorComposition,
     scrapForKill: scrapForKill, streakTracker: streakTracker, fmtTime: fmtTime,
     validateMaps: validateMaps, findBase: findBase

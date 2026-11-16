@@ -60,7 +60,7 @@
 
     $('btn-start').addEventListener('click', startRun);
     $('btn-armory').addEventListener('click', function () { if (Snd) Snd.play('click'); buildArmory(); showScreen('screen-armory'); });
-    $('btn-rank').addEventListener('click', function () { openPlaceholder('排行榜', '赛季排名与好友榜，敬请期待。'); });
+    $('btn-rank').addEventListener('click', function () { if (Snd) Snd.play('click'); buildRank(); showScreen('screen-rank'); });
     $('btn-settings').addEventListener('click', function () { if (Snd) Snd.play('click'); showScreen('screen-settings'); });
     $('btn-ph-back').addEventListener('click', function () { showScreen('screen-menu'); });
     buildSettings();
@@ -262,6 +262,33 @@
     }, { passive: true });
   }
 
+  /* ---------- leaderboard (local) ---------- */
+  function buildRank() {
+    var stats = L.rankStats(save.runsHistory);
+    $('rank-best-floor').textContent = stats.bestFloor > 0 ? 'FLOOR ' + stats.bestFloor : '—';
+    $('rank-best-kills').textContent = stats.bestKills > 0 ? stats.bestKills + ' 机' : '—';
+    $('rank-best-time').textContent = stats.bestTime !== null ? L.fmtTime(stats.bestTime) : '—';
+    $('rank-runs').textContent = '共 ' + stats.runs + ' 场战绩（本地保存）';
+    var list = $('rank-list');
+    list.innerHTML = '';
+    if (!save.runsHistory.length) {
+      list.appendChild(el('div', 'rank-empty', '暂无战绩，快去出击！'));
+    }
+    save.runsHistory.forEach(function (r) {
+      var row = el('div', 'rank-row');
+      var d = new Date(r.date);
+      var dateStr = (d.getMonth() + 1) + '-' + d.getDate() + ' ' +
+        String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      row.appendChild(el('span', 'rank-date', dateStr));
+      row.appendChild(el('span', 'rank-floor', 'F' + r.floor));
+      row.appendChild(el('span', 'rank-kills', r.kills + ' 击毁'));
+      row.appendChild(el('span', 'rank-time', L.fmtTime(r.timeSec || 0)));
+      row.appendChild(el('span', 'rank-badge' + (r.victory ? ' win' : ' lose'), r.victory ? '通关' : '战败'));
+      list.appendChild(row);
+    });
+    $('btn-rank-back').onclick = function () { if (Snd) Snd.play('click'); showScreen('screen-menu'); };
+  }
+
   /* ---------- run flow ---------- */
   function freshStats() {
     return L.applyArmory(L.freshStats(), save.armory);
@@ -347,6 +374,10 @@
     run.endTime = Date.now();
     save.scrapTotal += run.scrap;
     if (run.floor > save.bestFloor) save.bestFloor = run.floor;
+    save.runsHistory = L.recordRun(save.runsHistory, {
+      date: new Date().toISOString(), floor: run.floor, kills: run.kills,
+      scrap: run.scrap, timeSec: Math.round((run.endTime - run.startTime) / 1000), victory: victory
+    });
     storeSave();
     G.setPaused(true);
     buildResult(victory, subtitle);
